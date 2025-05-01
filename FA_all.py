@@ -366,15 +366,11 @@ def pbc(pos, L, min_dist=1):
     
     for i in prange(n - 1):
         dt[i] = pos[i + 1] - pos[i]
-        if dt[i] > L // 2:
-            dt[i] = L - dt[i]
         if min_dist==0:
-            dt[i] -= -1
+            dt[i] -= 1
     
     # Останній елемент обчислюємо окремо через періодичність
     dt[n - 1] = L - pos[n - 1] + pos[0]
-    if dt[n - 1] > L // 2:
-        dt[n - 1] = L - dt[n - 1]
     if min_dist==0:
         dt[n - 1] -= 1
     
@@ -399,15 +395,17 @@ def obc(pos, L, min_dist=1):
     n = len(pos)
     dt = np.zeros(n, dtype=np.int32)
     
-    for i in prange(n - 1):
+    dt[0] = pos[0]
+    if min_dist==0:
+        dt[0] -= 1
+    
+    for i in prange(1, n - 1):
         dt[i] = pos[i + 1] - pos[i]
         if min_dist==0:
             dt[i] -= 1
     
     # Останній елемент обчислюємо окремо
-    dt[n - 1] = L - pos[n - 1] + pos[0]
-    if dt[n - 1] < min_dist:
-        dt[n - 1] = min_dist
+    dt[n - 1] = L - pos[n - 1]
     if min_dist==0:
         dt[n - 1] -= 1
     
@@ -1983,8 +1981,8 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         # Save to Excel - modify to use older pandas style
         writer = pd.ExcelWriter(output_filename)
         df_batch.to_excel(writer, index=False)
-        writer.save()
-        #writer.close()
+        #writer.save()
+        writer.close()
         
         return html.Div(["Saved batch results to {}".format(output_filename)])
     except Exception as e:
@@ -2174,6 +2172,9 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             # Розрахунок відстаней
             dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
             model[ngram].dt = dt
+
+            if ngram=='dursley':
+                print(model[ngram].dt)
             
             # Обробка вікон для цього n-грама
             for wind in windows:
@@ -2505,7 +2506,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             # Save the main file with new_ngram data
             writer = pd.ExcelWriter(output_filename)
             df_to_save.to_excel(writer, index=False)
-            writer.save()
+            #writer.save()
+            writer.close()
 
             # If new_ngram exists and we have its details, save them too
             if new_ngram and hasattr(new_ngram, 'dfa'):
@@ -2516,7 +2518,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                 df_details['∆F'] = list(new_ngram.dfa.values())
                 df_details['fit=a*w^b'] = new_ngram.temp_dfa
                 df_details.to_excel(writer_details, index=False)
-                writer_details.save()
+                #writer_details.save()
+                writer_details.close()
                 return [html.Div([
                     "Saved main data to {}".format(output_filename),
                     html.Br(),
@@ -2570,7 +2573,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
-            writer.save()
+            #writer.save()
+            writer.close()
 
             if active_cell:
                 try:
@@ -2590,7 +2594,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                 df1['∆F'] = list(model[ngram].fa.values())
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
                                 df1.to_excel(writer_details, index=False)
-                                writer_details.save()
+                                #writer_details.save()
+                                writer_details.close()
                                 return [html.Div([
                                     "Saved main data to {}".format(output_filename),
                                     html.Br(),
