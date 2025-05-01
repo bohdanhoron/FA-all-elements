@@ -1668,14 +1668,20 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         L = len(data)
         
         # Calculate window parameters based on batch settings
+        # NOTE виправити ці автоматичні призначення!!!
         if batch_window_mode == "ui":
             # Use the values from the UI
             wm_val = int(w_max) if w_max is not None else int(L / 20)
             w_val = int(w_s) if w_s is not None else int(wm_val / 10)
             wh_val = int(w_s) if w_s is not None else w_val
             we_val = int(w_e) if w_e is not None else w_val
+            #wm_val = int(w_max) if w_max is not None else raise ValueError
+            #w_val = int(w_s) if w_s is not None else raise ValueError
+            #wh_val = int(w_s) if w_s is not None else raise ValueError
+            #we_val = int(w_e) if w_e is not None else raise ValueError
         else:  # auto
             # Calculate based on file length
+            # NOTE ці рядки умови при "dynamic" не працюють
             if definition == "dynamic":
                 wm_val = int(L / 10)
                 w_val = int(wm_val / 10)
@@ -1707,105 +1713,257 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Build a vocabulary count for statistics
         V = len(local_model)
+
+        if definition=="static":
         
-        # Make DataFrame locally instead of using global function to save memory
-        filtered_data = list(filter(lambda x: len(local_model[x].pos) >= f_min, local_model))
-        
-        data_df = {"ngram": [], "F": np.empty(len(filtered_data), dtype=np.int32)}
-        for i, ngram in enumerate(filtered_data):
-            data_df["ngram"].append(ngram)
-            data_df["F"][i] = len(local_model[ngram].pos)
-        
-        current_df = pd.DataFrame(data=data_df)
-        
-        # Process positions and calculate parameters
-        temp_gamma = []
-        temp_R = []
-        temp_error = []
-        temp_a = []
-        
-        windows = list(range(w_val, wm_val, we_val))
-        
-        # Process each ngram
-        for i, row in current_df.iterrows():
-            ngram = row['ngram']
+            # Make DataFrame locally instead of using global function to save memory
+            filtered_data = list(filter(lambda x: len(local_model[x].pos) >= f_min, local_model))
             
-            # Generate boolean array for this ngram
-            local_model[ngram].bool = np.zeros(L, dtype=np.int8)
-            for pos in local_model[ngram].pos:
-                local_model[ngram].bool[pos] = 1
+            data_df = {"ngram": [], "F": np.empty(len(filtered_data), dtype=np.int32)}
+            for i, ngram in enumerate(filtered_data):
+                data_df["ngram"].append(ngram)
+                data_df["F"][i] = len(local_model[ngram].pos)
             
-            # Calculate distances
-            min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
-            local_model[ngram].dt = calculate_distance(np.array(local_model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
+            current_df = pd.DataFrame(data=data_df)
             
-            # Process windows
-            local_model[ngram].fa = {}
-            local_model[ngram].counts = {}
+            # Process positions and calculate parameters
+            temp_gamma = []
+            temp_R = []
+            temp_error = []
+            temp_a = []
             
-            for wind in windows:
+            windows = list(range(w_val, wm_val, we_val))
+            
+            # Process each ngram
+            for i, row in current_df.iterrows():
+                ngram = row['ngram']
+                
+                # Generate boolean array for this ngram
+                local_model[ngram].bool = np.zeros(L, dtype=np.int8)
+                for pos in local_model[ngram].pos:
+                    local_model[ngram].bool[pos] = 1
+                
+                # Calculate distances
+                min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
+                local_model[ngram].dt = calculate_distance(np.array(local_model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
+                
+                # Process windows
+                local_model[ngram].fa = {}
+                local_model[ngram].counts = {}
+                
+                for wind in windows:
+                    if overlap_mode == "overlapping":
+                        local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
+                    else:
+                        local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
+                                                                    overlap_mode=overlap_mode, min_window=w_val, window_expansion=we_val)
+                    local_model[ngram].fa[wind] = mse(local_model[ngram].counts[wind])
+                
+                ff = [local_model[ngram].fa[wind] for wind in windows]
+                
+                try:
+                    c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
+                    a_val = c[0]
+                    gamma_val = c[1]
+                    temp_fa = [fit(w_val, c[0], c[1]) for w_val in windows]
+                    temp_error.append(round(r2_score(ff, temp_fa), 5))
+                    temp_gamma.append(round(gamma_val, 8))
+                    temp_a.append(round(a_val, 8))
+                except:
+                    # Handle curve fitting errors
+                    temp_error.append(0)
+                    temp_gamma.append(0)
+                    temp_a.append(0)
+                
+                r = round(R(np.array(local_model[ngram].dt)), 8)
+                temp_R.append(r)
+            
+            # Handle n-grams formatting if needed
+            if n_size > 1:
+                temp_ngram = []
+                for ng in current_df['ngram']:
+                    if isinstance(ng, tuple):
+                        temp_ngram.append(" ".join(ng))
+                    else:
+                        temp_ngram.append(ng)
+                current_df["ngram"] = temp_ngram
+            
+            # Add calculated parameters to DataFrame
+            current_df['R'] = temp_R
+            current_df['gamma'] = temp_gamma
+            current_df['a'] = temp_a
+            current_df['goodness'] = temp_error
+            current_df = current_df.sort_values(by="F", ascending=False)
+            current_df['rank'] = range(1, len(current_df) + 1)
+            current_df = current_df.set_index(pd.Index(np.arange(len(current_df))))
+            
+            # Calculate the 8 parameters
+            df_filtered = current_df.copy()
+            if len(df_filtered) > 0:
+                df_filtered['w'] = df_filtered['F'] / df_filtered['F'].sum()
+                
+                R_avg = df_filtered['R'].mean()
+                dR = df_filtered['R'].std()
+                Rw_avg = (df_filtered['R'] * df_filtered['w']).sum()
+                dRw = np.sqrt((((df_filtered['R'] - Rw_avg) ** 2) * df_filtered['w']).sum())
+                
+                gamma_avg = df_filtered['gamma'].mean()
+                dgamma = df_filtered['gamma'].std()
+                gammaw_avg = (df_filtered['gamma'] * df_filtered['w']).sum()
+                dgammaw = np.sqrt((((df_filtered['gamma'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
+            else:
+                # Default values if no data
+                R_avg = dR = Rw_avg = dRw = gamma_avg = dgamma = gammaw_avg = dgammaw = 0
+
+            """del data
+            del local_model"""
+            del current_df
+            del df_filtered
+            del temp_gamma
+            del temp_R
+            del temp_error
+            del temp_a
+
+        elif definition=="dynamic":
+
+            # Додаємо перевірку на None для безпеки
+            w_max_val = int(L / 10)
+            #w_max_val = int(w_max) if w_max is not None else int(L / 10)
+            #w_s_val = int(w_s) if w_s is not None else 5
+            #w_max_val = int(w_max) if w_max is not None else 100
+            w_s_val = int(w_max_val / 10)
+            #w_s_val = int(w_s) if w_s is not None else int(w_max_val / 10)
+            #w_e_val = int(w_e) if w_e is not None else 5
+            #w_e_val = int(w_e) if w_e is not None else w_s_val
+            w_e_val = w_s_val
+            
+            # Запобігання ValueError: range() arg 3 must not be zero
+            if w_e_val == 0:
+                w_e_val = 5
+                print("Warning: Window expansion (w_e) was 0, set to default value 5")
+            
+            windows = list(range(w_s_val, w_max_val, w_e_val))
+
+            #print(w_s_val, w_max_val, w_e_val)
+            
+            # Створення нового n-граму та його обробка
+            new_ngram = newNgram(data, w_s_val, L)
+            
+            # Визначаємо функцію для паралельної обробки вікон
+            def process_window(w):
                 if overlap_mode == "overlapping":
-                    local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
+                    return new_ngram.func(w)
                 else:
-                    local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
-                                                                overlap_mode=overlap_mode, min_window=w_val, window_expansion=we_val)
-                local_model[ngram].fa[wind] = mse(local_model[ngram].counts[wind])
+                    return new_ngram.func(w, overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
             
-            ff = [local_model[ngram].fa[wind] for wind in windows]
+            # Паралельна обробка вікон (якщо їх достатньо багато)
+            if len(windows) > 4:  # Паралелізуємо лише якщо є достатня кількість вікон
+                with ThreadPoolExecutor(max_workers=min(4, len(windows))) as executor:
+                    list(executor.map(process_window, windows))
+            else:
+                # Послідовна обробка для малої кількості вікон
+                for w in windows:
+                    process_window(w)
             
+            # Оптимізоване створення списків для елементів та їх позицій
+            temp_v = []
+            temp_pos = []
+            unique_items = set()  # Використовуємо множину для швидшого пошуку
+            
+            for i, ngram in enumerate(data):
+                if ngram not in unique_items:
+                    unique_items.add(ngram)
+                    temp_v.append(ngram)
+                    temp_pos.append(i)
+            
+            # Використовуємо numpy масиви для ефективнішої обробки
+            temp_pos_array = np.array(temp_pos, dtype=np.uint32)
+            # Використовуємо перший елемент або "new_ngram" для розрахунку відстаней
+            ngram_for_calc = temp_v[0] if temp_v else "new_ngram"
+            new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram_for_calc, min_dist_option)
+            new_ngram.R = round(R(new_ngram.dt), 8)
+
+            #print(new_ngram.dt)
+            
+            # Обробка помилок при підгонці кривої
             try:
-                c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
-                a_val = c[0]
-                gamma_val = c[1]
-                temp_fa = [fit(w_val, c[0], c[1]) for w_val in windows]
-                temp_error.append(round(r2_score(ff, temp_fa), 5))
-                temp_gamma.append(round(gamma_val, 8))
-                temp_a.append(round(a_val, 8))
-            except:
-                # Handle curve fitting errors
-                temp_error.append(0)
-                temp_gamma.append(0)
-                temp_a.append(0)
-            
-            r = round(R(np.array(local_model[ngram].dt)), 8)
-            temp_R.append(r)
-        
-        # Handle n-grams formatting if needed
-        if n_size > 1:
-            temp_ngram = []
-            for ng in current_df['ngram']:
-                if isinstance(ng, tuple):
-                    temp_ngram.append(" ".join(ng))
+                dfa_keys = list(new_ngram.dfa.keys())
+                dfa_values = list(new_ngram.dfa.values())
+                
+                # Перевірка наявності достатньої кількості даних для підбору кривої
+                if len(dfa_keys) < 2 or len(dfa_values) < 2:
+                    print("Недостатньо даних для підбору кривої")
+                    new_ngram.a = 1.0
+                    new_ngram.gamma = 0.5
+                    new_ngram.temp_dfa = [1.0] * (len(dfa_keys) if dfa_keys else 1)
+                    new_ngram.goodness = 0.0
                 else:
-                    temp_ngram.append(ng)
-            current_df["ngram"] = temp_ngram
-        
-        # Add calculated parameters to DataFrame
-        current_df['R'] = temp_R
-        current_df['gamma'] = temp_gamma
-        current_df['a'] = temp_a
-        current_df['goodness'] = temp_error
-        current_df = current_df.sort_values(by="F", ascending=False)
-        current_df['rank'] = range(1, len(current_df) + 1)
-        current_df = current_df.set_index(pd.Index(np.arange(len(current_df))))
-        
-        # Calculate the 8 parameters
-        df_filtered = current_df.copy()
-        if len(df_filtered) > 0:
-            df_filtered['w'] = df_filtered['F'] / df_filtered['F'].sum()
+                    c, _ = curve_fit(fit, dfa_keys, dfa_values, method='lm', maxfev=5000)
+                    new_ngram.a = round(c[0], 8)
+                    new_ngram.gamma = round(c[1], 8)
+                    
+                    # Оптимізуємо обчислення temp_dfa
+                    new_ngram.temp_dfa = [fit(w, new_ngram.a, new_ngram.gamma) for w in dfa_keys]
+                    new_ngram.goodness = round(r2_score(dfa_values, new_ngram.temp_dfa), 8)
+                
+                # Звільняємо пам'ять від тимчасових змінних
+                del dfa_keys, dfa_values
+            except Exception as e:
+                print(f"Помилка при підборі кривої: {e}")
+                new_ngram.a = 1.0
+                new_ngram.gamma = 0.5
+                new_ngram.temp_dfa = []
+                new_ngram.goodness = 0.0
             
-            R_avg = df_filtered['R'].mean()
-            dR = df_filtered['R'].std()
-            Rw_avg = (df_filtered['R'] * df_filtered['w']).sum()
-            dRw = np.sqrt((((df_filtered['R'] - Rw_avg) ** 2) * df_filtered['w']).sum())
+            # Створення DataFrame для представлення результатів
+            """df = pd.DataFrame({
+                'rank': [1],
+                'ngram': ['new_ngram'],
+                'F': [len(temp_pos)],
+                'R': [new_ngram.R],
+                'a': [new_ngram.a],
+                'gamma': [new_ngram.gamma],
+                'goodness': [new_ngram.goodness]
+            })"""
             
-            gamma_avg = df_filtered['gamma'].mean()
-            dgamma = df_filtered['gamma'].std()
-            gammaw_avg = (df_filtered['gamma'] * df_filtered['w']).sum()
-            dgammaw = np.sqrt((((df_filtered['gamma'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
-        else:
-            # Default values if no data
-            R_avg = dR = Rw_avg = dRw = gamma_avg = dgamma = gammaw_avg = dgammaw = 0
+            V = len(temp_v)
+            
+            end_time = time()
+            execution_time = end_time - start_time
+            
+            # Підготовка даних для відображення
+            #df_table = df.to_dict("records")
+            
+            # Додаємо інформацію про розмір словника і час виконання
+            vocab_info = f"Vocabulary: {V}"
+            time_info = f"Time: {execution_time:.4f} s"
+            
+            #df_filtered['w'] = df_filtered['F'] / df_filtered['F'].sum()
+            
+            #R_avg = df_filtered['R'].mean()
+            #dR = df_filtered['R'].std()
+            #Rw_avg = (df_filtered['R'] * df_filtered['w']).sum()
+            #dRw = np.sqrt((((df_filtered['R'] - Rw_avg) ** 2) * df_filtered['w']).sum())
+
+            R_avg = new_ngram.R
+            dR = 0
+            Rw_avg = 0
+            dRw = 0
+
+            gamma_avg = new_ngram.gamma
+            dgamma = 0
+            gammaw_avg = 0
+            dgammaw = 0
+            
+            #gamma_avg = df_filtered['gamma'].mean()
+            #dgamma = df_filtered['gamma'].std()
+            #gammaw_avg = (df_filtered['gamma'] * df_filtered['w']).sum()
+            #dgammaw = np.sqrt((((df_filtered['gamma'] - gammaw_avg) ** 2) * df_filtered['w']).sum())
+            
+            # Звільняємо пам'ять від тимчасових змінних
+            del temp_v, temp_pos, unique_items, temp_pos_array
+            gc.collect()
+
         
         # Calculate execution time
         end_time = time()
@@ -1828,18 +1986,20 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             "gammaw_avg": round(gammaw_avg, 8),
             "dgammaw": round(dgammaw, 8)
         }
+
+        #print(batch_result)
         
         batch_results.append(batch_result)
         
         # Explicitly clean up all local variables
         del data
         del local_model
-        del current_df
+        """del current_df
         del df_filtered
         del temp_gamma
         del temp_R
         del temp_error
-        del temp_a
+        del temp_a"""
         
         # Force garbage collection multiple times
         gc.collect()
@@ -1981,8 +2141,8 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         # Save to Excel - modify to use older pandas style
         writer = pd.ExcelWriter(output_filename)
         df_batch.to_excel(writer, index=False)
-        #writer.save()
-        writer.close()
+        writer.save()
+        #writer.close()
         
         return html.Div(["Saved batch results to {}".format(output_filename)])
     except Exception as e:
@@ -2038,9 +2198,14 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         start = time()
         
         # Додаємо перевірку на None для безпеки
-        w_s_val = int(w_s) if w_s is not None else 5
-        w_max_val = int(w_max) if w_max is not None else 100
-        w_e_val = int(w_e) if w_e is not None else 5
+        #w_max_val = int(w_max) if w_max is not None else int(L / 10)
+        w_max_val = int(L / 10)
+        #w_s_val = int(w_s) if w_s is not None else 5
+        #w_max_val = int(w_max) if w_max is not None else 100
+        w_s_val = int(w_max_val / 10)
+        #w_s_val = int(w_s) if w_s is not None else int(w_max_val / 10)
+        w_e_val = w_s_val
+        #w_e_val = int(w_e) if w_e is not None else w_s_val
         
         # Запобігання ValueError: range() arg 3 must not be zero
         if w_e_val == 0:
@@ -2048,6 +2213,7 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             print("Warning: Window expansion (w_e) was 0, set to default value 5")
         
         windows = list(range(w_s_val, w_max_val, w_e_val))
+        #print(w_s_val, w_max_val, w_e_val)
         
         # Створення нового n-граму та його обробка
         new_ngram = newNgram(data, w_s_val, L)
@@ -2085,6 +2251,8 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         ngram_for_calc = temp_v[0] if temp_v else "new_ngram"
         new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram_for_calc, min_dist_option)
         new_ngram.R = round(R(new_ngram.dt), 8)
+
+        #print(new_ngram.dt)
         
         # Обробка помилок при підгонці кривої
         try:
@@ -2126,6 +2294,8 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             'gamma': [new_ngram.gamma],
             'goodness': [new_ngram.goodness]
         })
+
+        #print(df)
         
         V = len(temp_v)
         
@@ -2154,9 +2324,14 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         df = make_dataframe(model, f_min)
         
         # Перевірка безпеки для None значень
-        w_s_val = int(w_s) if w_s is not None else 5
-        w_max_val = int(w_max) if w_max is not None else 100
-        w_e_val = int(w_e) if w_e is not None else 5
+        w_max_val = int(w_max) if w_max is not None else int(L / 20)
+        #w_s_val = int(w_s) if w_s is not None else 5
+        #w_max_val = int(w_max) if w_max is not None else 100
+        w_s_val = int(w_s) if w_s is not None else int(w_max_val / 20)
+        #w_e_val = int(w_e) if w_e is not None else 5
+        w_e_val = int(w_e) if w_e is not None else w_s_val
+
+        print("Proceed carefully, window sizes could be automatically assigned!")
         
         # Запобігання ValueError: range() arg 3 must not be zero
         if w_e_val == 0:
@@ -2173,9 +2348,6 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
             model[ngram].dt = dt
 
-            if ngram=='dursley':
-                print(model[ngram].dt)
-            
             # Обробка вікон для цього n-грама
             for wind in windows:
                 if overlap_mode == "overlapping":
@@ -2506,8 +2678,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             # Save the main file with new_ngram data
             writer = pd.ExcelWriter(output_filename)
             df_to_save.to_excel(writer, index=False)
-            #writer.save()
-            writer.close()
+            writer.save()
+            #writer.close()
 
             # If new_ngram exists and we have its details, save them too
             if new_ngram and hasattr(new_ngram, 'dfa'):
@@ -2518,8 +2690,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                 df_details['∆F'] = list(new_ngram.dfa.values())
                 df_details['fit=a*w^b'] = new_ngram.temp_dfa
                 df_details.to_excel(writer_details, index=False)
-                #writer_details.save()
-                writer_details.close()
+                writer_details.save()
+                #writer_details.close()
                 return [html.Div([
                     "Saved main data to {}".format(output_filename),
                     html.Br(),
@@ -2573,8 +2745,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             
             writer = pd.ExcelWriter(output_filename)
             df_copy.to_excel(writer, index=False)
-            #writer.save()
-            writer.close()
+            writer.save()
+            #writer.close()
 
             if active_cell:
                 try:
@@ -2594,8 +2766,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                 df1['∆F'] = list(model[ngram].fa.values())
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
                                 df1.to_excel(writer_details, index=False)
-                                #writer_details.save()
-                                writer_details.close()
+                                writer_details.save()
+                                #writer_details.close()
                                 return [html.Div([
                                     "Saved main data to {}".format(output_filename),
                                     html.Br(),
