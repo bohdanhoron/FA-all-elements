@@ -1593,6 +1593,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     for idx, (filename, file_content) in enumerate(file_list, 1):
         # Force garbage collection before starting new file
         gc.collect()
+
+        print(f"{filename}, {definition}")
         
         # Calculate F_min based on file length
         file_length = file_lengths[filename][split]
@@ -1731,7 +1733,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             temp_R = []
             temp_error = []
             temp_a = []
-            
+           
+            print(f"windows: w_val {w_val}, wm_val {wm_val}, we_val {we_val}.")
             windows = list(range(w_val, wm_val, we_val))
             
             # Process each ngram
@@ -1842,6 +1845,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 w_e_val = 5
                 print("Warning: Window expansion (w_e) was 0, set to default value 5")
             
+            print(f"LENGTH {L}")
+            print(f"windows: w_s_val {w_s_val}, w_max_val {w_max_val}, w_e_val {w_e_val}.")
             windows = list(range(w_s_val, w_max_val, w_e_val))
 
             #print(w_s_val, w_max_val, w_e_val)
