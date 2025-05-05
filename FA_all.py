@@ -16,6 +16,8 @@ import openpyxl
 
 # Dash і візуалізація
 import dash
+#from dash import dcc, html, dash_table as dt
+#from dash import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_table
@@ -1482,6 +1484,8 @@ def process_selected_file(selected_filename, split, definition, n):
     if definition == "dynamic":
         data = prepare_data(file, n, split)
         L = len(data)
+        #w_max = int(L / 10)
+        #w_min = int(w_max / 10)
         w_max = int(L / 10)
         w_min = int(w_max / 10)
     else:
@@ -1674,7 +1678,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         if batch_window_mode == "ui":
             # Use the values from the UI
             wm_val = int(w_max) if w_max is not None else int(L / 20)
-            w_val = int(w_s) if w_s is not None else int(wm_val / 10)
+            w_val = int(w_s) if w_s is not None else int(wm_val / 20)
+            #w_val = int(w_s) if w_s is not None else int(wm_val / 10)
             wh_val = int(w_s) if w_s is not None else w_val
             we_val = int(w_e) if w_e is not None else w_val
             #wm_val = int(w_max) if w_max is not None else raise ValueError
@@ -1685,8 +1690,10 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             # Calculate based on file length
             # NOTE ці рядки умови при "dynamic" не працюють
             if definition == "dynamic":
-                wm_val = int(L / 10)
-                w_val = int(wm_val / 10)
+                #wm_val = int(L / 10)
+                #w_val = int(wm_val / 10)
+                wm_val = int(L / 20)
+                w_val = int(wm_val / 20)
             else:
                 wm_val = int(L / 20)
                 w_val = int(wm_val / 20)
@@ -1735,7 +1742,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             temp_a = []
            
             print(f"windows: w_val {w_val}, wm_val {wm_val}, we_val {we_val}.")
-            windows = list(range(w_val, wm_val, we_val))
+            #windows = list(range(w_val, wm_val, we_val))
+            windows = list(range(w_val, wm_val+1, we_val))
             
             # Process each ngram
             for i, row in current_df.iterrows():
@@ -1830,11 +1838,13 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         elif definition=="dynamic":
 
             # Додаємо перевірку на None для безпеки
-            w_max_val = int(L / 10)
+            w_max_val = int(L / 20)
+            #w_max_val = int(L / 10)
             #w_max_val = int(w_max) if w_max is not None else int(L / 10)
             #w_s_val = int(w_s) if w_s is not None else 5
             #w_max_val = int(w_max) if w_max is not None else 100
-            w_s_val = int(w_max_val / 10)
+            #w_s_val = int(w_max_val / 10)
+            w_s_val = int(w_max_val / 20)
             #w_s_val = int(w_s) if w_s is not None else int(w_max_val / 10)
             #w_e_val = int(w_e) if w_e is not None else 5
             #w_e_val = int(w_e) if w_e is not None else w_s_val
@@ -1847,7 +1857,8 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             
             print(f"LENGTH {L}")
             print(f"windows: w_s_val {w_s_val}, w_max_val {w_max_val}, w_e_val {w_e_val}.")
-            windows = list(range(w_s_val, w_max_val, w_e_val))
+            #windows = list(range(w_s_val, w_max_val, w_e_val))
+            windows = list(range(w_s_val, w_max_val+1, w_e_val))
 
             #print(w_s_val, w_max_val, w_e_val)
             
@@ -1892,8 +1903,9 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
             
             # Обробка помилок при підгонці кривої
             try:
-                dfa_keys = list(new_ngram.dfa.keys())
-                dfa_values = list(new_ngram.dfa.values())
+                dfa_keys = sorted(list(new_ngram.dfa.keys()))
+                #dfa_values = list(new_ngram.dfa.values())
+                dfa_values = [new_ngram.dfa[key] for key in dfa_keys]
                 
                 # Перевірка наявності достатньої кількості даних для підбору кривої
                 if len(dfa_keys) < 2 or len(dfa_values) < 2:
@@ -2129,28 +2141,30 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         return html.Div(["No batch results to save"])
     
     try:
-        # Create DataFrame from batch results
         df_batch = pd.DataFrame(batch_results)
-        
+    
         # Ensure column names match the display columns for consistency
         # This ensures the saved file has the same data structure as what's shown in the UI
         column_mapping = {}
         
         # Create filename with parameters
-        output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
-            n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
+        #output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
+        #    n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
+        output_filename = f"saved_data/batch_results_n={n_size},split={split},condition={condition},definition={definition},min_dist={min_dist_option},overlap={overlap_mode},window_mode={batch_window_mode}.xlsx"
         
         # Ensure directory exists
         os.makedirs("saved_data", exist_ok=True)
         
         # Save to Excel - modify to use older pandas style
-        writer = pd.ExcelWriter(output_filename)
-        df_batch.to_excel(writer, index=False)
-        writer.save()
-        #writer.close()
+        #writer = pd.ExcelWriter(output_filename)
+        #df_batch.to_excel(writer, index=False)
+        
+        with pd.ExcelWriter(output_filename) as writer:
+                df_batch.to_excel(writer, index=False)
         
         return html.Div(["Saved batch results to {}".format(output_filename)])
     except Exception as e:
+        print(e)
         return html.Div(["Error saving batch results: {}".format(str(e))])
 
 @app.callback([Output("table", "data"), Output("chain", "figure"),
@@ -2204,21 +2218,24 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         
         # Додаємо перевірку на None для безпеки
         #w_max_val = int(w_max) if w_max is not None else int(L / 10)
-        w_max_val = int(L / 10)
-        #w_s_val = int(w_s) if w_s is not None else 5
+        #w_max_val = int(L / 10)
+        w_max_val = int(w_max) if w_max is not None else int(L / 20)
+        w_s_val = int(w_s) if w_s is not None else int(w_max_val / 20)
         #w_max_val = int(w_max) if w_max is not None else 100
-        w_s_val = int(w_max_val / 10)
+        #w_s_val = int(w_max_val / 10)
+        #w_s_val = int(w_max_val / 20)
         #w_s_val = int(w_s) if w_s is not None else int(w_max_val / 10)
-        w_e_val = w_s_val
-        #w_e_val = int(w_e) if w_e is not None else w_s_val
+        #w_e_val = w_s_val
+        w_e_val = int(w_e) if w_e is not None else w_s_val
         
         # Запобігання ValueError: range() arg 3 must not be zero
         if w_e_val == 0:
             w_e_val = 5
             print("Warning: Window expansion (w_e) was 0, set to default value 5")
         
-        windows = list(range(w_s_val, w_max_val, w_e_val))
-        #print(w_s_val, w_max_val, w_e_val)
+        #windows = list(range(w_s_val, w_max_val, w_e_val))
+        windows = list(range(w_s_val, w_max_val+1, w_e_val))
+        print(w_s_val, w_max_val, w_e_val)
         
         # Створення нового n-граму та його обробка
         new_ngram = newNgram(data, w_s_val, L)
@@ -2261,8 +2278,9 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         
         # Обробка помилок при підгонці кривої
         try:
-            dfa_keys = list(new_ngram.dfa.keys())
-            dfa_values = list(new_ngram.dfa.values())
+            dfa_keys = sorted(list(new_ngram.dfa.keys()))
+            #dfa_values = list(new_ngram.dfa.values())
+            dfa_values = [new_ngram.dfa[key] for key in dfa_keys]
             
             # Перевірка наявності достатньої кількості даних для підбору кривої
             if len(dfa_keys) < 2 or len(dfa_values) < 2:
@@ -2343,7 +2361,8 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             w_e_val = 5
             print("Warning: Window expansion (w_e) was 0, set to default value 5")
         
-        windows = list(range(w_s_val, w_max_val, w_e_val))
+        #windows = list(range(w_s_val, w_max_val, w_e_val))
+        windows = list(range(w_s_val, w_max_val+1, w_e_val))
         
         # Функція для обробки окремого n-грама
         def process_ngram(ngram_data):
@@ -2512,7 +2531,8 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                             go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.dfa.values()], mode='markers', name="∆F"))
                         
                         if hasattr(new_ngram, 'temp_dfa') and new_ngram.temp_dfa:
-                            fig1.add_trace(go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.temp_dfa], name="fit=aw^b"))
+                            #fig1.add_trace(go.Scatter(x=[*new_ngram.dfa.keys()], y=[*new_ngram.temp_dfa], name="fit=aw^b"))
+                            fig1.add_trace(go.Scatter(x=[*sorted(new_ngram.dfa.keys())], y=[*new_ngram.temp_dfa], name="fit=aw^b"))
                         
                         fig1.update_xaxes(type=scale)
                         fig1.update_yaxes(type=scale)
@@ -2664,6 +2684,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
         return dash.no_update
     if filename is None:
         return [html.Div(["No file selected to save"])]
+
+    #print(active_cell)
     
     try:
         file = filename
@@ -2682,26 +2704,33 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             
             # Save the main file with new_ngram data
             writer = pd.ExcelWriter(output_filename)
-            df_to_save.to_excel(writer, index=False)
-            writer.save()
+            #df_to_save.to_excel(writer, index=False)
+            #writer.save()
+            with pd.ExcelWriter(output_filename) as writer:
+                    df_to_save.to_excel(writer, index=False)
             #writer.close()
 
             # If new_ngram exists and we have its details, save them too
-            if new_ngram and hasattr(new_ngram, 'dfa'):
-                details_filename = "saved_data/{} new_ngram_details.xlsx".format(file)
-                writer_details = pd.ExcelWriter(details_filename)
-                df_details = pd.DataFrame()
-                df_details["w"] = list(new_ngram.dfa.keys())
-                df_details['∆F'] = list(new_ngram.dfa.values())
-                df_details['fit=a*w^b'] = new_ngram.temp_dfa
-                df_details.to_excel(writer_details, index=False)
-                writer_details.save()
-                #writer_details.close()
-                return [html.Div([
-                    "Saved main data to {}".format(output_filename),
-                    html.Br(),
-                    "Saved new_ngram details to {}".format(details_filename)
-                ])]
+            if active_cell:
+                if new_ngram and hasattr(new_ngram, 'dfa'):
+                    details_filename = "saved_data/{} new_ngram_details.xlsx".format(file)
+                    writer_details = pd.ExcelWriter(details_filename)
+                    df_details = pd.DataFrame()
+                    df_details["w"] = sorted(list(new_ngram.dfa.keys()))
+                    #df_details['∆F'] = list(new_ngram.dfa.values())
+                    df_details['∆F'] = [new_ngram.dfa[key] for key in sorted(list(new_ngram.dfa.keys()))]
+                    df_details['fit=a*w^b'] = new_ngram.temp_dfa
+                    #df_details.to_excel(writer_details, index=False)
+                    
+                    with pd.ExcelWriter(details_filename) as writer:
+                            df_details.to_excel(writer, index=False)
+                    #writer_details.save()
+                    #writer_details.close()
+                    return [html.Div([
+                        "Saved main data to {}".format(output_filename),
+                        html.Br(),
+                        "Saved new_ngram details to {}".format(details_filename)
+                    ])]
             
             return [html.Div(["Saved data to {}".format(output_filename)])]
         
@@ -2749,8 +2778,10 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             os.makedirs("saved_data", exist_ok=True)
             
             writer = pd.ExcelWriter(output_filename)
-            df_copy.to_excel(writer, index=False)
-            writer.save()
+            #df_copy.to_excel(writer, index=False)
+            with pd.ExcelWriter(output_filename) as writer:
+                    df_copy.to_excel(writer, index=False)
+            #writer.save()
             #writer.close()
 
             if active_cell:
@@ -2765,13 +2796,17 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                             ngram = df.iloc[selected_index]['ngram']
                             if ngram != 'new_ngram' and ngram in model:
                                 details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram)
-                                writer_details = pd.ExcelWriter(details_filename)
+                                #writer_details = pd.ExcelWriter(details_filename)
                                 df1 = pd.DataFrame()
-                                df1["w"] = list(model[ngram].fa.keys())
-                                df1['∆F'] = list(model[ngram].fa.values())
+                                df1["w"] = sorted(list(model[ngram].fa.keys()))
+                                #df1['∆F'] = list(model[ngram].fa.values())
+                                df1['∆F'] = [model[ngram].fa[key] for key in sorted(list(model[ngram].fa.keys()))]
                                 df1['fit=a*w^b'] = model[ngram].temp_fa
-                                df1.to_excel(writer_details, index=False)
-                                writer_details.save()
+                                #df1.to_excel(writer_details, index=False)
+                                
+                                with pd.ExcelWriter(details_filename) as writer:
+                                        df1.to_excel(writer, index=False)
+                                #writer_details.save()
                                 #writer_details.close()
                                 return [html.Div([
                                     "Saved main data to {}".format(output_filename),
