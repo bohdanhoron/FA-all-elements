@@ -194,7 +194,8 @@ def make_dataframe(model, fmin=3):
         data["ngram"].append(ngram)
 
         if ngram == "new_ngram" and hasattr(model[ngram], 'bool'):
-            data['F'][i] = sum(model[ngram].bool)
+            #data['F'][i] = sum(model[ngram].bool)
+            data['F'][i] = np.sum(model[ngram].bool)
         elif ngram == "new_ngram":
             # Якщо атрибут bool відсутній, встановлюємо значення за замовчуванням
             data['F'][i] = 0
@@ -250,35 +251,74 @@ def make_markov_chain(data: List, order: int = 1) -> Dict[str, Ngram]:
                 model['new_ngram'].pos.append(i + 1)
     else:
         # Попередньо визначаємо множину унікальних елементів для оптимізації
-        unique_items = set(data)
+        # unique_items = set(data)
         
         # Ініціалізуємо модель для кожного унікального елемента
-        for item in unique_items:
-            model[item] = Ngram()
-            model[item].pos = []
-            model[item].bool = np.zeros(L, dtype=np.uint8)
+        # for item in unique_items:
+        #     model[item] = Ngram()
+        #     model[item].pos = []
+        #     model[item].bool = np.zeros(L, dtype=np.uint8)
         
         # Заповнюємо модель
+        # for i in range(L):
+        #     item = data[i]
+        #     next_item = data[i + order]
+            
+        #     model[item].update([next_item])
+        #     model[item].pos.append(i + order)
+        #     model[item].bool[i] = 1
+
         for i in range(L):
             item = data[i]
             next_item = data[i + order]
 
-            model[item].update([next_item])
-            model[item].pos.append(i + order)
-            model[item].bool[i] = 1
-            
-            if i == 0:  # Перший елемент
-                model['new_ngram'].bool[i] = 1
+            if item not in model:
+                model[item] = Ngram()
+                model[item].pos = []
+                model[item].bool = np.zeros(L, dtype=np.uint8)
+
+                model[item].update([next_item])
+                model[item].pos.append(i + order)
+                model[item].bool[i] = 1
+
                 model['new_ngram'].pos.append(i + order)
+                model['new_ngram'].bool[i] = 1
+
+            else:
+                model[item].update([next_item])
+                model[item].pos.append(i + order)
+                model[item].bool[i] = 1
+        
+        if data[L] in model:
+            model[data[L]].update({data[0]: 1})
+        else:
+            model[data[L]] = {data[0]: 1}
+
+        # Connect the first word with the last one
+        if data[0] in model:
+            model[data[0]].update({data[L]: 1})
+        else:
+            model[data[0]] = {data[L]: 1}
 
         # З'єднуємо останнє слово з першим та перше з останнім
-        model[data[L]].update([data[0]])
-        if data[L] not in model:
+        
+        """if data[L] not in model:
+            #model[data[L]] = Ngram()
+            #model[data[L]].pos = []
+            #model[data[L]].pos.append(L + order)
+            #model[data[L]].bool = np.zeros(L, dtype=np.uint8)
+            #model[data[L]].bool[L-1] = 1
+            model[data[L]].update([data[0]])
+            model['new_ngram'].pos.append(L + order)
+            model['new_ngram'].bool[L-1] = 1
+        else:
             model[data[L]].pos.append(L + order)
             model[data[L]].bool = np.zeros(L, dtype=np.uint8)
             model[data[L]].bool[L-1] = 1
         
-        model[data[0]].update([data[L]])
+        model[data[0]].update([data[L]])"""
+
+    #print(sum(model['new_ngram'].bool))
         
     V = len(model)
     return model
@@ -2794,7 +2834,8 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                         selected_index = ids[row_index]
                         if selected_index < len(df):
                             ngram = df.iloc[selected_index]['ngram']
-                            if ngram != 'new_ngram' and ngram in model:
+                            #if ngram != 'new_ngram' and ngram in model:
+                            """if ngram == 'new_ngram' and ngram in model:
                                 details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram)
                                 #writer_details = pd.ExcelWriter(details_filename)
                                 df1 = pd.DataFrame()
@@ -2812,7 +2853,22 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                     "Saved main data to {}".format(output_filename),
                                     html.Br(),
                                     "Saved details to {}".format(details_filename)
-                                ])]
+                                ])]"""
+
+                            details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram)
+                            df1 = pd.DataFrame()
+                            df1["w"] = sorted(list(model[ngram].fa.keys()))
+                            df1['∆F'] = [model[ngram].fa[key] for key in sorted(list(model[ngram].fa.keys()))]
+                            df1['fit=a*w^b'] = model[ngram].temp_fa
+                            
+                            with pd.ExcelWriter(details_filename) as writer:
+                                    df1.to_excel(writer, index=False)
+                           
+                            return [html.Div([
+                               "Saved main data to {}".format(output_filename),
+                               html.Br(),
+                               "Saved details to {}".format(details_filename)
+                               ])]
                 except Exception as e:
                     print("Error saving ngram details: {}".format(e))
 
