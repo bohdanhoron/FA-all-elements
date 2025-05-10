@@ -37,6 +37,14 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import numba
 import os
+import chardet
+
+# tkinter for selecting browsing folder
+import tkinter as tk
+from tkinter import filedialog
+
+#Code Tokenizer
+from Modules.CodeTokenizer import CodeTokenizer
 
 # Функція для очищення пам'яті
 def clear_memory(keep: List[str] = []):
@@ -590,7 +598,7 @@ def fit(x, a, b):
 
 
 @memoize
-def prepare_data(data: str, n: int, split: str) -> List:
+def prepare_data(data: str, n: int, split: str, filename: str, computer_code: bool = False, ignore_comments: bool = False) -> List:
     """
     Підготовка даних для аналізу, розбиття на n-грами залежно від вказаних параметрів.
     
@@ -607,17 +615,19 @@ def prepare_data(data: str, n: int, split: str) -> List:
         return dash.no_update
     
     # Використовуємо спільний код попередньої обробки для всіх типів
-    data = re.sub(r'\n+', '\n', data)
-    data = re.sub(r'\n\s\s', '\n', data)
-    data = re.sub(r'﻿', '', data)
+    if not computer_code:
+        data = re.sub(r'\n+', '\n', data)
+        data = re.sub(r'\n\s\s', '\n', data)
+        data = re.sub(r'﻿', '', data)
     
     # Для n=1 (одиничні елементи)
     if n == 1:
         if split == "word":
             # Обробка тексту для слів
-            data = re.sub(r'--', ' -', data)
-            processor = NgrammProcessor()
-            processor.preprocess(data)
+            if not computer_code:
+                data = re.sub(r'--', ' -', data)
+            processor = NgrammProcessor(computer_code=computer_code, ignore_comments=ignore_comments)
+            processor.preprocess(data, file_name=filename)
             result = processor.get_words()
             L = len(result)
             return result
@@ -810,6 +820,52 @@ layout1 = html.Div([
                         dbc.CardHeader("Configuration:", style={"background-color": "#e9f5fe", "fontWeight": "bold"}),
                         dbc.CardBody(
                             [
+                                #MODE SELECT
+                                html.Div([
+                                    html.H6("Text type", 
+                                            className="text-primary text-center mb-2", 
+                                            style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    html.Div([
+                                        dcc.RadioItems(
+                                            id='mode-selector',
+                                            options=[
+                                                {'label': 'Natural Text', 'value': 'natural_text'},
+                                                {'label': 'Computer Code', 'value': 'computer_code'},
+                                            ],
+                                            value='natural_text', 
+                                            labelStyle={'display': 'inline-block', 'margin': '0 10px 0 10px'}
+                                        ),
+                                    ],                                 
+                                    style={
+                                        'display': 'flex',
+                                        'justifyContent': 'center',
+                                        'alignItems': 'center',
+                                    }),
+                                    html.Hr(),
+                                ]),
+                                #IGNORE COMMENTS
+                                html.Div([
+                                    html.H6("Ignore comments", 
+                                            className="text-primary text-center mb-2", 
+                                            style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
+                                    html.Div([
+                                        dcc.RadioItems(
+                                            id='comments-selector',
+                                            options=[
+                                                {'label': 'Yes', 'value': True},
+                                                {'label': 'No', 'value': False},
+                                            ],
+                                            value=False, 
+                                            labelStyle={'display': 'inline-block', 'margin': '0 10px 0 10px'}
+                                        ),
+                                    ],                                 
+                                    style={
+                                        'display': 'flex',
+                                        'justifyContent': 'center',
+                                        'alignItems': 'center',
+                                    }),
+                                    html.Hr(),
+                                ], id="ignore-comments-container"),
                                 # FILE SECTION
                                 html.Div([
                                     html.H6("File Selection", 
@@ -848,7 +904,7 @@ layout1 = html.Div([
                                                     dcc.Dropdown(
                                                         id='file-selector',
                                                         options=[],
-                                                        placeholder="Select a file to analyze",
+                                                        placeholder="Select file to analyze",
                                                         style={"minWidth": "250px", "maxWidth": "100%", "whiteSpace": "nowrap", "textOverflow": "ellipsis"}
                                                     )
                                                 ], 
@@ -867,7 +923,7 @@ layout1 = html.Div([
                                     
                                     dbc.InputGroup(
                                         [
-                                            dbc.InputGroupText("Size of ngram"),
+                                            dbc.InputGroupText("Order of n-grams"),
                                             dbc.Input(id="n_size", type="number", value=1, style={"font-weight": "bold"})
                                         ], 
                                         size="md", 
@@ -907,7 +963,7 @@ layout1 = html.Div([
                                 className="mb-2"
                                     ),
                                     dbc.InputGroup([
-                                        dbc.InputGroupText("Min Tau:"),
+                                        dbc.InputGroupText("Min tau:"),
                                         dbc.Select(
                                             id="min_dist_option",
                                             options=[
@@ -1233,7 +1289,7 @@ layout1 = html.Div([
                         dbc.CardHeader(
                             dbc.Tabs(
                                 [
-                                    dbc.Tab(label="distribution", tab_id="tab1", label_style={"font-weight": "bold"}),
+                                    dbc.Tab(label="n-gram distribution in text", tab_id="tab1", label_style={"font-weight": "bold"}),
                                 ],
                                 id='card-tabs1',
                                 active_tab="tab1"
@@ -1258,8 +1314,8 @@ layout1 = html.Div([
                         dbc.CardHeader(
                             dbc.Tabs(
                                 [
-                                    dbc.Tab(label="flunctuacion", tab_id="tab2", label_style={"font-weight": "bold"}),
-                                    dbc.Tab(label="alpha/R", tab_id="tab3", label_style={"font-weight": "bold"})
+                                    dbc.Tab(label="fluctuations", tab_id="tab2", label_style={"font-weight": "bold"}),
+                                    dbc.Tab(label="gamma vs. R", tab_id="tab3", label_style={"font-weight": "bold"})
                                 ],
                                 id='card-tabs',
                                 active_tab="tab2"
@@ -1271,8 +1327,8 @@ layout1 = html.Div([
                             dcc.RadioItems(
                                 id="scale",
                                 options=[
-                                    {"label": "linear", "value": "linear"},
-                                    {"label": "log", "value": "log"}
+                                    {"label": "linear fit", "value": "linear"},
+                                    {"label": "log-log fit", "value": "log"}
                                 ],
                                 value="linear",
                                 labelStyle={"marginRight": "15px", "fontWeight": "bold"},
@@ -1345,33 +1401,64 @@ class NgrammProcessor:
     """
     Клас для обробки тексту і отримання n-грам.
     """
-    def __init__(self, ignore_punctuation: bool = True):
+    def __init__(self, ignore_punctuation: bool = True, computer_code: bool = False, ignore_comments: bool = False):
         """
         Ініціалізує процесор n-грам.
         
         Args:
             ignore_punctuation: Чи ігнорувати пунктуацію при обробці
+            computer_code:      Чи обробляти текст як комп'ютерний код
+            ignore_comments:    Чи ігнорувати коментарі в коді
         """
         self.ignore_punctuation = ignore_punctuation
+        self.computer_code = computer_code
+        self.ignore_comments = ignore_comments
         self.words = []
         self.processed_text = ""
         
-    def preprocess(self, text: str) -> None:
+    def preprocess(self, text: str, file_name: str = None) -> None:
         """
         Попередня обробка тексту.
         
         Args:
             text: Вхідний текст для обробки
+            file_name: назва файлу (потрібно для правильного визначення мови коду)
         """
+
+        # Обробка тексту комп'ютерної програми
+        if self.computer_code:
+            code_tokenizer = CodeTokenizer(text, file_name)
+            result = code_tokenizer.process()
+
+            if not self.ignore_comments:
+                # Передає коментарі на парсер натурального тексту
+                for token in result[:]:
+                    if (("Comment" in token["type"] or "Doc" in token["type"]) and token["type"] != "Comment.Special"):
+                        comment_words = self.__process_words(token["value"], False)
+                        if comment_words and len(comment_words) > 0:
+                            result.remove(token)
+                            self.words += comment_words
+            else: 
+                result = [item for item in result if "Comment" not in item["type"] and "Doc" not in item["type"]]
+
+            self.words += [item["value"] for item in result]
+            return
+            
+        # Розбиваємо текст на слова
+        self.words = self.__process_words(text)
+    
+    def __process_words(self, text: str, lower_case: bool = True) -> List[str]:
         # Видаляємо пунктуацію, якщо потрібно
         if self.ignore_punctuation:
             # Використовуємо оптимізований метод видалення пунктуації
             self.processed_text = ''.join(char for char in text if char not in punctuation or char == '-' or char == "'")
         else:
             self.processed_text = text
-            
-        # Розбиваємо текст на слова
-        self.words = [word.lower() for word in re.findall(r'\b\w+(?:[-\']\w+)*\b', self.processed_text)]
+
+        if lower_case:
+            return [word.lower() for word in re.findall(r'\b\w+(?:[-\']\w+)*\b', self.processed_text)]
+        else:
+            return [word for word in re.findall(r'\b\w+(?:[-\']\w+)*\b', self.processed_text)]
         
     def get_words(self, remove_empty_entries: bool = False) -> List[str]:
         """
@@ -1405,11 +1492,13 @@ length_updated = False
      Output('file-selector', 'options'),
      Output('min-max-length-info', 'children')], # Added new output
     [Input('upload-data', 'contents')],
-    [State('upload-data', 'filename'),
+    [State('mode-selector', 'value'),
+     State('comments-selector', 'value'),
+     State('upload-data', 'filename'),
      State('n_size', 'value'),
      State('split', 'value')] # Added split state
 )
-def update_upload_status(contents, filenames, n_size, split_mode):
+def update_upload_status(contents,processor_mode, ignore_comments, filenames, n_size, split_mode):
     global uploaded_files, file_lengths
     
     min_max_info = ""
@@ -1433,19 +1522,25 @@ def update_upload_status(contents, filenames, n_size, split_mode):
         try:
             content_type, content_string = content.split(',')
             decoded = base64.b64decode(content_string)
-            
+            detection = chardet.detect(decoded)
+            encoding = detection['encoding'] or 'windows-1251'
+            print(f"Detected encoding: {encoding}")
+
             try:
-                file_content = decoded.decode('utf-8')
+                file_content = decoded.decode(encoding)
                 uploaded_files[filename] = file_content
                 file_lengths[filename] = {}
                 
                 # Word length
-                text_word = re.sub(r'\n+', '\n', file_content)
-                text_word = re.sub(r'\n\s\s', '\n', text_word)
-                text_word = re.sub(r'﻿', '', text_word)
-                text_word = re.sub(r'--', ' -', text_word)
-                processor = NgrammProcessor()
-                processor.preprocess(text_word)
+                computer_code = True if processor_mode == 'computer_code' else False
+                text_word = file_content
+                if not computer_code:
+                    text_word = re.sub(r'\n+', '\n', file_content)
+                    text_word = re.sub(r'\n\s\s', '\n', text_word)
+                    text_word = re.sub(r'﻿', '', text_word)
+                    text_word = re.sub(r'--', ' -', text_word)
+                processor = NgrammProcessor(computer_code=computer_code, ignore_comments=ignore_comments)
+                processor.preprocess(text_word, file_name=filename)
                 words = processor.get_words()
                 file_lengths[filename]['word'] = len(words)
                 
@@ -1507,11 +1602,13 @@ def update_upload_status(contents, filenames, n_size, split_mode):
      Output('w_e', 'value'),
      Output('w_max', 'value')],
     [Input('file-selector', 'value'),
-     Input('split', 'value')],
+     Input('split', 'value'),
+     Input('mode-selector', 'value'),
+     Input('comments-selector', 'value')],
     [State('def', 'value'),
      State('n_size', 'value')]
 )
-def process_selected_file(selected_filename, split, definition, n):
+def process_selected_file(selected_filename, split, processor_mode, ignore_comments, definition, n):
     global L, data, length_updated
     
     if selected_filename is None or selected_filename not in uploaded_files:
@@ -1519,10 +1616,11 @@ def process_selected_file(selected_filename, split, definition, n):
     
     file = uploaded_files[selected_filename]
     length_updated = False
-    
+    computer_code = True if processor_mode == 'computer_code' else False
+
     # Calculate L based on split type (dynamic or static handles data differently)
     if definition == "dynamic":
-        data = prepare_data(file, n, split)
+        data = prepare_data(file, n, split, selected_filename, computer_code, ignore_comments)
         L = len(data)
         #w_max = int(L / 10)
         #w_min = int(w_max / 10)
@@ -1550,15 +1648,18 @@ def process_selected_file(selected_filename, split, definition, n):
             data = temp
             L = len(data)
         elif split == "word":
-            file = re.sub(r'\n+', '\n', file)
-            file = re.sub(r'\n\s\s', '\n', file)
-            file = re.sub(r'﻿', '', file)
-            file = re.sub(r'--', ' -', file)
-            processor = NgrammProcessor()
-            processor.preprocess(file)
+            if not computer_code:
+                file = re.sub(r'\n+', '\n', file)
+                file = re.sub(r'\n\s\s', '\n', file)
+                file = re.sub(r'﻿', '', file)
+                file = re.sub(r'--', ' -', file)
+
+            processor = NgrammProcessor(computer_code=computer_code, ignore_comments=ignore_comments)
+            processor.preprocess(file, file_name=selected_filename)
             data = processor.get_words()
             L = len(data)
 
+        file_lengths[selected_filename][split] = L
         w_max = int(L / 20)
         w_min = int(w_max / 20)
         length_updated = True
@@ -1600,7 +1701,9 @@ new_ngram = None
     [Output("batch_table", "data"),
      Output("batch_results_container", "style")],
     [Input("batch_process", "n_clicks")],
-    [State("fmin1", "value"),
+    [State('mode-selector', 'value'),
+     State('comments-selector', 'value'),
+     State("fmin1", "value"),
      State("fmin2", "value"),
      State("split", "value"),
      State("n_size", "value"),
@@ -1614,7 +1717,7 @@ new_ngram = None
      State("w_max", "value"),
      State("batch_window_mode", "value")]
 )
-def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
+def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
                       overlap_mode, w_min, w_s, w_e, w_max, batch_window_mode):
     global batch_results, uploaded_files, file_lengths
     
@@ -1634,6 +1737,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
     
     # Process each file sequentially and clear memory after each
     file_list = list(uploaded_files.items())
+    computer_code = True if processor_mode == 'computer_code' else False
     for idx, (filename, file_content) in enumerate(file_list, 1):
         # Force garbage collection before starting new file
         gc.collect()
@@ -1658,7 +1762,7 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
         
         # Process data based on definition mode
         if definition == "dynamic":
-            data = prepare_data(file_content, n_size, split)
+            data = prepare_data(file_content, n_size, split, filename, computer_code, ignore_comments)
         else:
             if split == "letter":
                 file_text = re.sub(r'	', '', file_content)
@@ -1700,12 +1804,15 @@ def process_all_files(n_clicks, fmin1, fmin2, split, n_size, condition, definiti
                 del clean_text
                 gc.collect()
             elif split == "word":
-                file_text = re.sub(r'\n+', '\n', file_content)
-                file_text = re.sub(r'\n\s\s', '\n', file_text)
-                file_text = re.sub(r'﻿', '', file_text)
-                file_text = re.sub(r'--', ' -', file_text)
-                processor = NgrammProcessor()
-                processor.preprocess(file_text)
+                file_text = file_content
+                if not computer_code:
+                    file_text = re.sub(r'\n+', '\n', file_content)
+                    file_text = re.sub(r'\n\s\s', '\n', file_text)
+                    file_text = re.sub(r'﻿', '', file_text)
+                    file_text = re.sub(r'--', ' -', file_text)
+
+                processor = NgrammProcessor(computer_code=computer_code, ignore_comments=ignore_comments)
+                processor.preprocess(file_text, file_name=filename)
                 data = processor.get_words()
                 del processor
                 del file_text
@@ -2175,12 +2282,17 @@ def update_batch_table_columns(n_clicks):
      State("batch_window_mode", "value")]
 )
 def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode):
+    global save_folder
     if n_clicks is None:
         return dash.no_update
     if not batch_results:
         return html.Div(["No batch results to save"])
     
     try:
+        if save_folder is None or save_folder == "":
+            pick_folder()
+            if save_folder is None or save_folder == "":
+                return dash.no_update
         df_batch = pd.DataFrame(batch_results)
     
         # Ensure column names match the display columns for consistency
@@ -2190,10 +2302,11 @@ def save_batch_results(n_clicks, n_size, split, condition, definition, min_dist_
         # Create filename with parameters
         #output_filename = "saved_data/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
         #    n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
-        output_filename = f"saved_data/batch_results_n={n_size},split={split},condition={condition},definition={definition},min_dist={min_dist_option},overlap={overlap_mode},window_mode={batch_window_mode}.xlsx"
-        
+        output_filename = "{}/batch_results_n={},split={},condition={},definition={},min_dist={},overlap={},window_mode={}.xlsx".format(
+            save_folder, n_size, split, condition, definition, min_dist_option, overlap_mode, batch_window_mode)
+                
         # Ensure directory exists
-        os.makedirs("saved_data", exist_ok=True)
+        os.makedirs(save_folder, exist_ok=True)
         
         # Save to Excel - modify to use older pandas style
         #writer = pd.ExcelWriter(output_filename)
@@ -2699,7 +2812,14 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
 
     return dash.no_update, dash.no_update
 
-
+@app.callback(
+    Output('ignore-comments-container', 'style'),
+    Input('mode-selector', 'value')
+)
+def toggle_comment_container_visibility(value):
+    if value == 'natural_text':
+        return {'display': 'none'}
+    return {'display': 'block'}
 
 
 
@@ -2720,6 +2840,7 @@ def tab_content(active_tab2, active_tab1, active_cell, page_current, row_ids, id
                State("min_dist_option", "value"),
                State("overlap_mode", "value")])
 def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w_max, fmin, opt, definition, min_dist_option, overlap_mode):
+    global save_folder
     if n is None:
         return dash.no_update
     if filename is None:
@@ -2728,6 +2849,11 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
     #print(active_cell)
     
     try:
+        if save_folder is None or save_folder == "":
+            pick_folder()
+            if save_folder is None or save_folder == "":
+                return dash.no_update
+
         file = filename
         global df, model, new_ngram
 
@@ -2736,11 +2862,11 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             # Create DataFrame with the new_ngram row
             df_to_save = df.copy()  # This will include the new_ngram row
             
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            output_filename = "{11}/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode, save_folder)
             
             # Ensure save directory exists
-            os.makedirs("saved_data", exist_ok=True)
+            os.makedirs(save_folder, exist_ok=True)
             
             # Save the main file with new_ngram data
             writer = pd.ExcelWriter(output_filename)
@@ -2753,7 +2879,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             # If new_ngram exists and we have its details, save them too
             if active_cell:
                 if new_ngram and hasattr(new_ngram, 'dfa'):
-                    details_filename = "saved_data/{} new_ngram_details.xlsx".format(file)
+                    details_filename = "{}/{} new_ngram_details.xlsx".format(save_folder, file)
                     writer_details = pd.ExcelWriter(details_filename)
                     df_details = pd.DataFrame()
                     df_details["w"] = sorted(list(new_ngram.dfa.keys()))
@@ -2812,10 +2938,10 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
 
                 df_copy = df_copy.drop(columns=['w'])
 
-            output_filename = "saved_data/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
-                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode)
+            output_filename = "{11}/{0} condition={7},fmin={1},n={2},w=({3},{4},{5},{6}),definition={8},min_dist={9},overlap={10}.xlsx".format(
+                file, fmin, n_size, w_min, w_s, w_e, w_max, opt, definition, min_dist_option, overlap_mode, save_folder)
             
-            os.makedirs("saved_data", exist_ok=True)
+            os.makedirs(save_folder, exist_ok=True)
             
             writer = pd.ExcelWriter(output_filename)
             #df_copy.to_excel(writer, index=False)
@@ -2855,7 +2981,7 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
                                     "Saved details to {}".format(details_filename)
                                 ])]"""
 
-                            details_filename = "saved_data/{} {}_details.xlsx".format(file, ngram)
+                            details_filename = "{}/{} {}_details.xlsx".format(save_folder, file, ngram)
                             df1 = pd.DataFrame()
                             df1["w"] = sorted(list(model[ngram].fa.keys()))
                             df1['∆F'] = [model[ngram].fa[key] for key in sorted(list(model[ngram].fa.keys()))]
@@ -2876,6 +3002,32 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             
     except Exception as e:
         return [html.Div(["Error saving data: {}".format(str(e))])]
+
+save_folder = None
+def pick_folder():
+    global save_folder
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    new_folder = filedialog.askdirectory()
+    if new_folder and new_folder is not None and new_folder != "":
+        save_folder = new_folder
+    root.destroy() 
+
+@app.callback(
+    [Output('output_folder_label', 'children')],
+    [Input('pick_output_folder', 'n_clicks')]
+)
+def pick_output_folder(n):
+    global save_folder
+    if n is None:
+        return dash.no_update
+    pick_folder()
+    if save_folder and save_folder is not None:
+        return [html.Div(["Selected output folder as {} ".format(save_folder)]) ] 
+    else:
+        return [html.Div(["No output folder selected"])] 
+
 
 
 # import webbrowser # Commented out as it might cause issues if run non-interactively
