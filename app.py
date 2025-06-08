@@ -1,49 +1,28 @@
-import numbers
 from typing import List, Tuple, Optional, Dict, Any, Union
 import gc  # Garbage Collector для кращого управління пам'яттю
 
 import numpy as np
 from numba import jit, njit, prange
 import pandas as pd
-from scipy.optimize import curve_fit
-import matplotlib.pyplot as plt
 
 # Обробка даних і тексту
 import re
 from string import punctuation
 from time import time
-import openpyxl
 
 # Dash і візуалізація
 import dash
-import dash_core_components as dcc
-import dash_html_components as html
-import dash_table
 import dash_bootstrap_components as dbc
-import plotly.graph_objs as go
 
 # Системні і допоміжні бібліотеки
-import base64
-import io
-from os import listdir
 import webbrowser
-from dash.dependencies import Input, Output, State
-import plotly.express as px
-from sklearn.metrics import r2_score
-import networkx as nx
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
-import numba
-import os
-import chardet
 
 # tkinter for selecting browsing folder
 import tkinter as tk
 from tkinter import filedialog
 
 #Code Tokenizer
-from processing.CodeTokenizer import CodeTokenizer
-from processing.ngrams import newNgram
+#from processing.ngrams import newNgram
 
 from callbacks import *
 
@@ -150,9 +129,6 @@ def remove_punctuation(data):
             temp.append(data[i].lower())
     return "".join(temp)
 
-toast_visible = False
-error_visible = False
-#analyze_visible = False
 
 
 
@@ -641,27 +617,16 @@ file_lengths = {}
 batch_results = []
 
 # Removing the corpuses list since we're using file upload now
-# corpuses = listdir("corpus/")
 colors = {
     "background": "#a1a1a1",
     "text": "#a1a1a1"}
 
-import dash_bootstrap_components as dbc
 
-layout2 = html.Div()
 
-from dash.dependencies import Input, Output, State
 
 #app.layout = layout1
 df = None
 g = None
-import plotly.express as px
-from sklearn.metrics import r2_score
-import networkx as nx
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
-import numba
-import os
 
 def is_number(s: str) -> bool:
     """
