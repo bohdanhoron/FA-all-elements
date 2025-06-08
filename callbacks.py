@@ -3,7 +3,6 @@ from typing import List, Tuple, Optional, Dict, Any, Union
 import gc  # Garbage Collector для кращого управління пам'яттю
 
 import numpy as np
-from numba import jit, njit, prange
 import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
@@ -45,7 +44,8 @@ from tkinter import filedialog
 from processing.CodeTokenizer import CodeTokenizer
 from processing.NgrammProcessor import NgrammProcessor
 from processing.ngrams import Ngram, newNgram
-from calculations.bc import *#calculate_distance
+from calculations.bc import calculate_distance
+from calculations.filtering import highpass_threshold
 from app import * #prepare_data, make_markov_chain, clear_memory, remove_punctuation
 
 uploaded_files = {}
@@ -85,7 +85,8 @@ def update_upload_status(contents,processor_mode, ignore_comments, filenames, n_
     
     success_count = 0
     error_count = 0
-    
+
+    print("guessing encoding...")
     for i, (content, filename) in enumerate(zip(contents, filenames)):
         try:
             content_type, content_string = content.split(',')
@@ -187,6 +188,23 @@ def update_upload_status(contents,processor_mode, ignore_comments, filenames, n_
      State('n_size', 'value')]
 )
 def process_selected_file(selected_filename, split, processor_mode, ignore_comments, definition, n):
+    """
+    метод рахує розмір тексту і пропонує розміри вікон, оброблений тут текст далі нікуди не передається
+
+    Returns:
+    ---
+    lengths_elements: List of html objects
+        contain message about length of selected file in different units (letters&numbers, symbols, words)
+    w_min: int
+        minimal window size
+    w_s: int
+        step window size (how to move window over sequence)
+    w_e: int
+        expansion window size (how to increase window size)
+    w_max: int
+        maximal window size
+    """
+
     global L, data, length_updated
     
     if selected_filename is None or selected_filename not in uploaded_files:
@@ -205,6 +223,7 @@ def process_selected_file(selected_filename, split, processor_mode, ignore_comme
     else:
         # Static mode calculation based on selected split
         if split == "letter":
+        # letter preprocessing
             temp = []
             data = remove_punctuation(file)
             for word in data:
@@ -215,6 +234,7 @@ def process_selected_file(selected_filename, split, processor_mode, ignore_comme
             data = temp
             L = len(data)
         elif split == "symbol":
+        # symbol preprocessing
             temp = []
             for char in file:
                 if char == " " or char == "\n" or char == "\ufeff":
@@ -224,6 +244,7 @@ def process_selected_file(selected_filename, split, processor_mode, ignore_comme
             data = temp
             L = len(data)
         elif split == "word":
+        # word preprocessing
             """if not computer_code:
                 file = re.sub(r'\n+', '\n', file)
                 file = re.sub(r'\n\s\s', '\n', file)
@@ -306,12 +327,8 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
         
         # Calculate F_min based on file length
         file_length = file_lengths[filename][split]
-        if lmin == lmax:
-            f_min = fmin1  # If all files are the same length
-        else:
-            # Linear interpolation between fmin1 and fmin2
-            f_min = fmin1 + (fmin2 - fmin1) * (file_length - lmin) / (lmax - lmin)
-            f_min = round(f_min)  # Round to nearest integer
+
+        f_min = highpass_threshold(file_length, lmin, lmax, fmin1, fmin2)
         
         # Process the file
         start_time = time()
