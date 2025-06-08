@@ -45,6 +45,7 @@ from tkinter import filedialog
 from processing.CodeTokenizer import CodeTokenizer
 from processing.NgrammProcessor import NgrammProcessor
 from processing.ngrams import Ngram, newNgram
+from calculations.bc import *#calculate_distance
 from app import * #prepare_data, make_markov_chain, clear_memory, remove_punctuation
 
 uploaded_files = {}
@@ -455,6 +456,7 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
                 
                 # Calculate distances
                 min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
+
                 local_model[ngram].dt = calculate_distance(np.array(local_model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
                 
                 # Process windows
@@ -959,7 +961,6 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             w_e_val = 5
             print("Warning: Window expansion (w_e) was 0, set to default value 5")
         
-        #windows = list(range(w_s_val, w_max_val, w_e_val))
         windows = list(range(w_s_val, w_max_val+1, w_e_val))
         
         # Функція для обробки окремого n-грама
