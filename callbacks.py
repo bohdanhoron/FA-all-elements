@@ -42,8 +42,9 @@ import tkinter as tk
 from tkinter import filedialog
 
 #Code Tokenizer
-from Modules.CodeTokenizer import CodeTokenizer
-from Modules.NgrammProcessor import NgrammProcessor
+from processing.CodeTokenizer import CodeTokenizer
+from processing.NgrammProcessor import NgrammProcessor
+from processing.ngrams import Ngram, newNgram
 from app import * #prepare_data, make_markov_chain, clear_memory, remove_punctuation
 
 uploaded_files = {}

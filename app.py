@@ -42,7 +42,8 @@ import tkinter as tk
 from tkinter import filedialog
 
 #Code Tokenizer
-from Modules.CodeTokenizer import CodeTokenizer
+from processing.CodeTokenizer import CodeTokenizer
+from processing.ngrams import newNgram
 
 from callbacks import *
 
@@ -109,7 +110,7 @@ def memoize(func):
     return wrapper
 
 
-def remove_punctuation_for_words(data):
+#def remove_punctuation_for_words(data):
     """
     Розбиває текст на слова та видаляє знаки пунктуації.
     
@@ -120,7 +121,7 @@ def remove_punctuation_for_words(data):
         List[str]: Список оброблених слів
     """
     # Використовуємо ефективніший регулярний вираз один раз
-    words = re.findall(r'\b[a-zA-Z0-9]+(?:[-\'][a-zA-Z0-9]+)*\b', data.lower())
+    # words = re.findall(r'\b[a-zA-Z0-9]+(?:[-\'][a-zA-Z0-9]+)*\b', data.lower())
     
     # Обробляємо слова з дефісами та апострофами
     """result = []
@@ -134,7 +135,7 @@ def remove_punctuation_for_words(data):
             result.append(word)"""
     
     #return result
-    return words
+    #return words
 
 
 def remove_punctuation(data):
@@ -153,25 +154,6 @@ toast_visible = False
 error_visible = False
 analyze_visible = False
 
-class Ngram(dict):
-    def __init__(self, iterable=None):  # Ініціалізували наш розподіл як новий об'єкт класу, додаємо наявні елементи
-        super(Ngram, self).__init__()
-        self.fa = {}
-        self.counts = {}
-        self.sums = {}
-        if iterable:
-            self.update(iterable)
-
-    def update(self, iterable):  # Оновлюємо розподіл елементами з наявного ітеруємого набору даних
-        for item in iterable:
-            if item in self:
-                self[item] += 1
-            else:
-                self[item] = 1
-
-    def hist(self):
-        plt.bar(self.keys(), self.values())
-        plt.show()
 
 
 def make_dataframe(model, fmin=3):
@@ -775,21 +757,6 @@ def dfa(data: List, args: Tuple[int, int, int],
     
     return count
 
-
-class newNgram():
-    def __init__(self, data, wh, l):
-        self.data = data
-        self.count = {}
-        self.dfa = {}
-        self.wh, self.l = wh, l
-
-    def func(self, w, overlap_mode="overlapping", min_window=None, window_expansion=None):
-        if overlap_mode == "non-overlapping" and (min_window is None or window_expansion is None):
-            min_window = self.wh
-            window_expansion = self.wh
-        count = dfa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion)
-        self.count[w] = count
-        self.dfa[w] = float(mse(count)) # Окремо обчислюємо MSE для count
 
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -1396,83 +1363,6 @@ def is_number(s: str) -> bool:
     except (ValueError, TypeError):
         return False
 
-# NOTE клас із С# для обробки слів
-class NgrammProcessor:
-    """
-    Клас для обробки тексту і отримання n-грам.
-    """
-    def __init__(self, ignore_punctuation: bool = True, computer_code: bool = False, ignore_comments: bool = False):
-        """
-        Ініціалізує процесор n-грам.
-        
-        Args:
-            ignore_punctuation: Чи ігнорувати пунктуацію при обробці
-            computer_code:      Чи обробляти текст як комп'ютерний код
-            ignore_comments:    Чи ігнорувати коментарі в коді
-        """
-        self.ignore_punctuation = ignore_punctuation
-        self.computer_code = computer_code
-        self.ignore_comments = ignore_comments
-        self.words = []
-        self.processed_text = ""
-        
-    def preprocess(self, text: str, file_name: str = None) -> None:
-        """
-        Попередня обробка тексту.
-        
-        Args:
-            text: Вхідний текст для обробки
-            file_name: назва файлу (потрібно для правильного визначення мови коду)
-        """
-
-        # Обробка тексту комп'ютерної програми
-        if self.computer_code:
-            code_tokenizer = CodeTokenizer(text, file_name)
-            result = code_tokenizer.process()
-
-            if not self.ignore_comments:
-                # Передає коментарі на парсер натурального тексту
-                for token in result[:]:
-                    if (("Comment" in token["type"] or "Doc" in token["type"]) and token["type"] != "Comment.Special"):
-                        comment_words = self.__process_words(token["value"], False)
-                        if comment_words and len(comment_words) > 0:
-                            result.remove(token)
-                            self.words += comment_words
-            else: 
-                result = [item for item in result if "Comment" not in item["type"] and "Doc" not in item["type"]]
-
-            self.words += [item["value"] for item in result]
-            return
-            
-        # Розбиваємо текст на слова
-        self.words = self.__process_words(text)
-    
-    def __process_words(self, text: str, lower_case: bool = True) -> List[str]:
-        # Видаляємо пунктуацію, якщо потрібно
-        if self.ignore_punctuation:
-            # Використовуємо оптимізований метод видалення пунктуації
-            self.processed_text = ''.join(char for char in text if char not in punctuation or char == '-' or char == "'")
-        else:
-            self.processed_text = text
-
-        if lower_case:
-            return [word.lower() for word in re.findall(r'\b\w+(?:[-\']\w+)*\b', self.processed_text)]
-        else:
-            return [word for word in re.findall(r'\b\w+(?:[-\']\w+)*\b', self.processed_text)]
-        
-    def get_words(self, remove_empty_entries: bool = False) -> List[str]:
-        """
-        Отримує список слів із обробленого тексту.
-        
-        Args:
-            remove_empty_entries: Чи видаляти порожні рядки
-            
-        Returns:
-            List[str]: Список слів
-        """
-        if remove_empty_entries:
-            return [word for word in self.words if word]
-        return self.words
 
 
 def is_valid_letter(char: str) -> bool:
