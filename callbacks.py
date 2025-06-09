@@ -299,10 +299,11 @@ def process_selected_file(selected_filename, split, processor_mode, ignore_comme
      State("w_s", "value"),
      State("w_e", "value"),
      State("w_max", "value"),
-     State("batch_window_mode", "value")]
+     State("batch_window_mode", "value"),
+     State("selected-types", "value")]
 )
 def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, split, n_size, condition, definition, min_dist_option, 
-                      overlap_mode, w_min, w_s, w_e, w_max, batch_window_mode):
+                      overlap_mode, w_min, w_s, w_e, w_max, batch_window_mode, selected_ngrams=None):
     global batch_results, uploaded_files, file_lengths
     
     if n_clicks is None or not uploaded_files:
@@ -444,16 +445,23 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
         V = len(local_model)
 
         if definition=="static":
+            print(selected_ngrams)
         
             # Make DataFrame locally instead of using global function to save memory
-            filtered_data = list(filter(lambda x: len(local_model[x].pos) >= f_min, local_model))
-            
+            if selected_ngrams is None:
+                filtered_data = list(filter(lambda x: len(local_model[x].pos) >= f_min, local_model))
+            else:
+                filtered_data = selected_ngrams.split(', ')
+
+            print(filtered_data)
+
             data_df = {"ngram": [], "F": np.empty(len(filtered_data), dtype=np.int32)}
             for i, ngram in enumerate(filtered_data):
                 data_df["ngram"].append(ngram)
                 data_df["F"][i] = len(local_model[ngram].pos)
             
             current_df = pd.DataFrame(data=data_df)
+
             
             # Process positions and calculate parameters
             temp_gamma = []
@@ -464,11 +472,9 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
             print(f"windows: w_val {w_val}, wm_val {wm_val}, we_val {we_val}.")
             #windows = list(range(w_val, wm_val, we_val))
             windows = list(range(w_val, wm_val+1, we_val))
-            
-            # Process each ngram
+
             for i, row in current_df.iterrows():
                 ngram = row['ngram']
-                
                 
                 #r = round(R(np.array(local_model[ngram].dt)), 8)
                 #temp_R.append(r)
@@ -478,9 +484,9 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
                 r = round(R(np.array(local_model[ngram].dt)), 8)
 
                 # get ngram binary sequence with positions    
-                ngram.bool = np.zeros(L, dtype=np.int8)
-                for pos in ngram.pos:
-                    ngram.bool[pos] = 1
+                local_model[ngram].bool = np.zeros(L, dtype=np.int8)
+                for pos in local_model[ngram].pos:
+                    local_model[ngram].bool[pos] = 1
                 
                 a, gamma, fa, error = FA(local_model[ngram], L, windows, wh_val, overlap_mode, w_val, we_val)
 
@@ -1362,6 +1368,20 @@ def save(n, active_cell, page_current, ids, filename, n_size, w_min, w_s, w_e, w
             
     except Exception as e:
         return [html.Div(["Error saving data: {}".format(str(e))])]
+
+@dash.callback(
+        Output('select-types', 'children'),
+        Input('select-types-mode', 'value'))
+def check_type_selection(value):
+    if value=='true':
+        return dcc.Store(id="selected-types")
+    elif value=='false':
+        return dbc.InputGroup(
+                [
+                    dbc.InputGroupText("Write Type"),
+                    dbc.Input(id="selected-types", type="text", style={"font-weight": "bold"})
+                    ],
+                style={'marginBottom': '5px'})
 
 
 @dash.callback(

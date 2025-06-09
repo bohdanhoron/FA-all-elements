@@ -281,7 +281,20 @@ layout = html.Div([
                                            style={"background": "#f8f9fa", "padding": "6px", "border-radius": "5px"}),
                                     # Add the min-max info Div here
                                     html.Div(id='min-max-length-info', style={"marginTop": "5px", "fontSize": "small", "textAlign": "center", "marginBottom": "10px"}),
-                                    
+
+                                    dbc.InputGroup(
+                                        [
+                                            dbc.Select(
+                                                id="select-types-mode",
+                                                options=[
+                                                    {"label": "all types", "value": "true"},
+                                                    {"label": "select types", "value": "false"}
+                                                ],
+                                                value="true"
+                                            )],
+                                            style={'marginBottom': '5px'}
+                                        ),
+                                    html.Div(id="select-types", style={"marginTop": "5px", "fontSize": "small", "textAlign": "center", "marginBottom": "10px"}),
                                     dbc.InputGroup(
                                         [
                                             dbc.InputGroupText("Lmin: Fmin1"),
