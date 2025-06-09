@@ -44,8 +44,10 @@ from tkinter import filedialog
 from processing.CodeTokenizer import CodeTokenizer
 from processing.NgrammProcessor import NgrammProcessor
 from processing.ngrams import Ngram, newNgram
+
 from calculations.bc import calculate_distance
 from calculations.filtering import highpass_threshold
+from calculations.main import FA
 from app import * #prepare_data, make_markov_chain, clear_memory, remove_punctuation
 
 uploaded_files = {}
@@ -467,7 +469,7 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
                 ngram = row['ngram']
                 
                 # Generate boolean array for this ngram
-                local_model[ngram].bool = np.zeros(L, dtype=np.int8)
+                """local_model[ngram].bool = np.zeros(L, dtype=np.int8)
                 for pos in local_model[ngram].pos:
                     local_model[ngram].bool[pos] = 1
                 
@@ -502,10 +504,27 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
                     # Handle curve fitting errors
                     temp_error.append(0)
                     temp_gamma.append(0)
-                    temp_a.append(0)
+                    temp_a.append(0)"""
                 
+                #r = round(R(np.array(local_model[ngram].dt)), 8)
+                #temp_R.append(r)
+                min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
+                
+                local_model[ngram].dt = calculate_distance(np.array(local_model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
                 r = round(R(np.array(local_model[ngram].dt)), 8)
+
+                # get ngram binary sequence with positions    
+                ngram.bool = np.zeros(L, dtype=np.int8)
+                for pos in ngram.pos:
+                    ngram.bool[pos] = 1
+                
+                a, gamma, fa, error = FA(local_model[ngram], L, windows, wh_val, overlap_mode, w_val, we_val)
+
                 temp_R.append(r)
+                temp_a.append(a)
+                temp_gamma.append(gamma)
+                #temp_fa.append(fa)
+                temp_error.append(error)
             
             # Handle n-grams formatting if needed
             if n_size > 1:
@@ -987,9 +1006,25 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             # Розрахунок відстаней
             dt = calculate_distance(np.array(model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_option)
             model[ngram].dt = dt
+            
+            r = round(R(dt), 8)
+            model[ngram].R = r
 
+            a, gamma, fa, err = FA(model[ngram], L, windows, w_s_val, overlap_mode, w_s_val, w_e_val)
+
+            model[ngram].a = a
+            model[ngram].gamma = gamma
+            model[ngram].temp_fa = fa
+
+            return {
+                'ngram': ngram,
+                'a': round(a, 8),
+                'gamma': round(gamma, 8),
+                'error': round(err, 5),
+                'R': r
+            }
             # Обробка вікон для цього n-грама
-            for wind in windows:
+            """for wind in windows:
                 if overlap_mode == "overlapping":
                     model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode)
                 else:
@@ -1036,7 +1071,7 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
                     'gamma': 0,
                     'error': 0,
                     'R': r_val
-                }
+                }"""
         
         # Підготовка даних для паралельної обробки
         ngram_items = [(ngram, i) for i, ngram in enumerate(df["ngram"])]
