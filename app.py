@@ -22,7 +22,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 #Code Tokenizer
-#from processing.ngrams import newNgram
+from processing.ngrams import Ngram, newNgram
 
 from callbacks import *
 
@@ -290,75 +290,17 @@ def make_markov_chain(data: List, order: int = 1) -> Dict[str, Ngram]:
     return model
 
 
-
-
-@jit(nopython=True)
-def s(window: np.ndarray) -> int:
-    """
-    Обчислює суму значень вікна.
-    
-    Args:
-        window: Масив значень
-        
-    Returns:
-        int: Сума значень
-    """
-    # Використовуємо оптимізовану NumPy функцію
-    return np.sum(window)
-
-
-@njit(fastmath=True)
-def mse(x: np.ndarray) -> float:
-    """
-    Обчислює середньоквадратичну похибку (MSE) набору значень.
-    
-    Args:
-        x: Масив значень
-        
-    Returns:
-        float: Значення MSE
-    """
-    if len(x) == 0:
-        return 0.0
-        
-    # Оптимізоване обчислення MSE
-    mean_x = np.mean(x)
-    return np.sqrt(np.mean((x - mean_x) ** 2))
-
-
-@jit(nopython=True, fastmath=True)
-def R(x: np.ndarray) -> float:
-    """
-    Обчислює коефіцієнт варіації.
-    
-    Args:
-        x: Масив значень
-        
-    Returns:
-        float: Значення коефіцієнта варіації
-    """
-    if len(x) <= 1:
-        return 0.0
-        
-    # Оптимізоване обчислення коефіцієнта варіації
-    mean_x = np.mean(x)
-    if mean_x == 0:  # Запобігаємо діленню на нуль
-        return 0.0
-    std_x = np.std(x)
-    return std_x / mean_x
-
-
-@njit(fastmath=True)
-def calc_non_overlapping_shift(k, min_window, window_expansion):
-    """
-    Розраховує зміщення для режиму non-overlapping
-    k - номер кроку (починаючи з 1)
-    """
+#@njit(fastmath=True)
+#def calc_non_overlapping_shift(k, min_window, window_expansion):
+#    """
+#    Розраховує зміщення для режиму non-overlapping
+#    k - номер кроку (починаючи з 1)
+#    """
     # Numba не працює з None значеннями, тому перевірка робиться в make_windows
-    if k == 1:
-        return min_window
-    else:
-        return min_window + (k-1) * window_expansion
+#    if k == 1:
+#        return min_window
+#    else:
+#        return min_window + (k-1) * window_expansion
 
 @njit(fastmath=True)
 def make_windows(x: np.ndarray, wi: int, l: int, wsh: int, 
@@ -414,17 +356,13 @@ def make_windows(x: np.ndarray, wi: int, l: int, wsh: int,
     return sums
 
 
-@njit(fastmath=True)
+"""@njit(fastmath=True)
 def calc_sum(x):
     sums = np.empty(len(x))
     for i, w in enumerate(x):
         sums[i] = np.sum(w)
-    return sums
+    return sums"""
 
-
-@jit(nopython=True, fastmath=True)
-def fit(x, a, b):
-    return a * (x ** b)
 
 
 @memoize
@@ -538,72 +476,6 @@ def prepare_data(data: str, n: int, split: str, filename: str, computer_code: bo
 
     return []
 
-def dfa(data: List, args: Tuple[int, int, int], 
-       overlap_mode: str = "overlapping", 
-       min_window: Optional[int] = None, 
-       window_expansion: Optional[int] = None) -> np.ndarray:
-    """
-    Виконує аналіз флуктуацій (DFA) для даних.
-    
-    Args:
-        data: Вхідні дані для аналізу
-        args: Кортеж (розмір вікна, зсув вікна, довжина даних)
-        overlap_mode: Режим перекриття вікон ("overlapping" або "non-overlapping")
-        min_window: Мінімальний розмір вікна для режиму non-overlapping
-        window_expansion: Значення розширення вікна для режиму non-overlapping
-        
-    Returns:
-        np.ndarray: Масив результатів DFA аналізу
-    """
-    wi, wh, l = args
-    
-    if overlap_mode == "overlapping":
-        # Стандартний режим з фіксованим зміщенням
-        window_count = len(range(0, l - wi, wh))
-        #count = np.zeros(window_count, dtype=np.uint8)
-        count = np.zeros(window_count, dtype=np.uint16)
-        
-        for index, i in enumerate(range(0, l - wi, wh)):
-            temp_v = []
-            x = []
-            for ngram in data[i:i + wi]:
-                if ngram in temp_v:
-                    x.append(0)
-                else:
-                    temp_v.append(ngram)
-                    x.append(1)
-            count[index] = s(np.array(x, dtype=np.uint8))
-    else:
-        # Non-overlapping режим
-        if min_window is None:
-            min_window = wh
-        if window_expansion is None:
-            window_expansion = wh
-            
-        # Оцінюємо кількість і розташування вікон
-        k = 1
-        i = 0
-        window_positions = []
-        while i < l - wi:
-            window_positions.append(i)
-            shift = calc_non_overlapping_shift(k, min_window, window_expansion)
-            i += shift
-            k += 1
-            
-        count = np.zeros(len(window_positions), dtype=np.uint16)
-        #count = np.zeros(len(window_positions), dtype=np.uint8)
-        for index, i in enumerate(window_positions):
-            temp_v = []
-            x = []
-            for ngram in data[i:i + wi]:
-                if ngram in temp_v:
-                    x.append(0)
-                else:
-                    temp_v.append(ngram)
-                    x.append(1)
-            count[index] = s(np.array(x, dtype=np.uint8))
-    
-    return count
 
 
 

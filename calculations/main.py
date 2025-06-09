@@ -4,7 +4,8 @@ from sklearn.metrics import r2_score
 
 #from bc import calculate_distance
 from .stats import mse
-from app import make_windows, fit
+from app import make_windows#, fit
+from .fitting_functions import power_law
 
 def FA(ngram, L, windows, wh_val, overlap_mode, w_val, we_val):
 
@@ -23,11 +24,11 @@ def FA(ngram, L, windows, wh_val, overlap_mode, w_val, we_val):
     ff = [ngram.fa[wind] for wind in windows]
     
     try:
-        c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
+        c, _ = curve_fit(power_law, windows, ff, method='lm', maxfev=5000)
         
         a = round(c[0], 8)
         gamma = round(c[1], 8)
-        fa = [fit(w_val, c[0], c[1]) for w_val in windows]
+        fa = [power_law(w_val, c[0], c[1]) for w_val in windows]
         err = round(r2_score(ff, fa), 5)
     except Exception as e:
         print(f"{e}")

@@ -4,7 +4,6 @@ import gc  # Garbage Collector для кращого управління пам
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
 # Обробка даних і тексту
@@ -48,6 +47,8 @@ from processing.ngrams import Ngram, newNgram
 from calculations.bc import calculate_distance
 from calculations.filtering import highpass_threshold
 from calculations.main import FA
+from calculations.stats import R
+from calculations.fitting_functions import power_law
 from app import * #prepare_data, make_markov_chain, clear_memory, remove_punctuation
 
 uploaded_files = {}
@@ -468,43 +469,6 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
             for i, row in current_df.iterrows():
                 ngram = row['ngram']
                 
-                # Generate boolean array for this ngram
-                """local_model[ngram].bool = np.zeros(L, dtype=np.int8)
-                for pos in local_model[ngram].pos:
-                    local_model[ngram].bool[pos] = 1
-                
-                # Calculate distances
-                min_dist_int = int(min_dist_option) if isinstance(min_dist_option, (str, float)) else min_dist_option
-
-                local_model[ngram].dt = calculate_distance(np.array(local_model[ngram].pos, dtype=np.uint32), L, condition, ngram, min_dist_int)
-                
-                # Process windows
-                local_model[ngram].fa = {}
-                local_model[ngram].counts = {}
-                
-                for wind in windows:
-                    if overlap_mode == "overlapping":
-                        local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, overlap_mode=overlap_mode)
-                    else:
-                        local_model[ngram].counts[wind] = make_windows(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
-                                                                    overlap_mode=overlap_mode, min_window=w_val, window_expansion=we_val)
-                    local_model[ngram].fa[wind] = mse(local_model[ngram].counts[wind])
-                
-                ff = [local_model[ngram].fa[wind] for wind in windows]
-                
-                try:
-                    c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
-                    a_val = c[0]
-                    gamma_val = c[1]
-                    temp_fa = [fit(w_val, c[0], c[1]) for w_val in windows]
-                    temp_error.append(round(r2_score(ff, temp_fa), 5))
-                    temp_gamma.append(round(gamma_val, 8))
-                    temp_a.append(round(a_val, 8))
-                except:
-                    # Handle curve fitting errors
-                    temp_error.append(0)
-                    temp_gamma.append(0)
-                    temp_a.append(0)"""
                 
                 #r = round(R(np.array(local_model[ngram].dt)), 8)
                 #temp_R.append(r)
@@ -617,7 +581,8 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
                 # Послідовна обробка для малої кількості вікон
                 for w in windows:
                     process_window(w)
-            
+           
+            ### СТАТИЧНА ЧАСТИНА для розрахунку R ###
             # Оптимізоване створення списків для елементів та їх позицій
             temp_v = []
             temp_pos = []
@@ -636,40 +601,13 @@ def process_all_files(n_clicks, processor_mode, ignore_comments, fmin1, fmin2, s
             new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram_for_calc, min_dist_option)
             new_ngram.R = round(R(new_ngram.dt), 8)
 
-            #print(new_ngram.dt)
-            
-            # Обробка помилок при підгонці кривої
-            try:
-                dfa_keys = sorted(list(new_ngram.dfa.keys()))
-                #dfa_values = list(new_ngram.dfa.values())
-                dfa_values = [new_ngram.dfa[key] for key in dfa_keys]
-                
-                # Перевірка наявності достатньої кількості даних для підбору кривої
-                if len(dfa_keys) < 2 or len(dfa_values) < 2:
-                    print("Недостатньо даних для підбору кривої")
-                    new_ngram.a = 1.0
-                    new_ngram.gamma = 0.5
-                    new_ngram.temp_dfa = [1.0] * (len(dfa_keys) if dfa_keys else 1)
-                    new_ngram.goodness = 0.0
-                else:
-                    c, _ = curve_fit(fit, dfa_keys, dfa_values, method='lm', maxfev=5000)
-                    new_ngram.a = round(c[0], 8)
-                    new_ngram.gamma = round(c[1], 8)
-                    
-                    # Оптимізуємо обчислення temp_dfa
-                    new_ngram.temp_dfa = [fit(w, new_ngram.a, new_ngram.gamma) for w in dfa_keys]
-                    new_ngram.goodness = round(r2_score(dfa_values, new_ngram.temp_dfa), 8)
-                
-                # Звільняємо пам'ять від тимчасових змінних
-                del dfa_keys, dfa_values
-            except Exception as e:
-                print(f"Помилка при підборі кривої: {e}")
-                new_ngram.a = 1.0
-                new_ngram.gamma = 0.5
-                new_ngram.temp_dfa = []
-                new_ngram.goodness = 0.0
-            
-            
+            ##########################################
+
+
+            ### ДИНАМІЧНА ЧАСТИНА для розрахунку gamma ###
+
+            new_ngram.fit()
+
             V = len(temp_v)
             
             end_time = time()
@@ -900,6 +838,7 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
             for w in windows:
                 process_window(w)
         
+        ### СТАТИЧНА ЧАСТИНА для розрахунку R ###
         # Оптимізоване створення списків для елементів та їх позицій
         temp_v = []
         temp_pos = []
@@ -918,36 +857,10 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
         new_ngram.dt = calculate_distance(temp_pos_array, L, condition, ngram_for_calc, min_dist_option)
         new_ngram.R = round(R(new_ngram.dt), 8)
 
-        # Обробка помилок при підгонці кривої
-        try:
-            dfa_keys = sorted(list(new_ngram.dfa.keys()))
-            dfa_values = [new_ngram.dfa[key] for key in dfa_keys]
-            
-            # Перевірка наявності достатньої кількості даних для підбору кривої
-            if len(dfa_keys) < 2 or len(dfa_values) < 2:
-                print("Недостатньо даних для підбору кривої")
-                new_ngram.a = 1.0
-                new_ngram.gamma = 0.5
-                new_ngram.temp_dfa = [1.0] * (len(dfa_keys) if dfa_keys else 1)
-                new_ngram.goodness = 0.0
-            else:
-                c, _ = curve_fit(fit, dfa_keys, dfa_values, method='lm', maxfev=5000)
-                new_ngram.a = round(c[0], 8)
-                new_ngram.gamma = round(c[1], 8)
-                
-                # Оптимізуємо обчислення temp_dfa
-                new_ngram.temp_dfa = [fit(w, new_ngram.a, new_ngram.gamma) for w in dfa_keys]
-                new_ngram.goodness = round(r2_score(dfa_values, new_ngram.temp_dfa), 8)
-            
-            # Звільняємо пам'ять від тимчасових змінних
-            del dfa_keys, dfa_values
-        except Exception as e:
-            print(f"Помилка при підборі кривої: {e}")
-            new_ngram.a = 1.0
-            new_ngram.gamma = 0.5
-            new_ngram.temp_dfa = []
-            new_ngram.goodness = 0.0
-        
+        #############################################
+
+        new_ngram.fit()
+
         # Створення DataFrame для представлення результатів
         df = pd.DataFrame({
             'rank': [1],
@@ -1023,56 +936,7 @@ def update_table(n, dataframe, f_min, w_min, w_s, w_e, w_max, definition, min_di
                 'error': round(err, 5),
                 'R': r
             }
-            # Обробка вікон для цього n-грама
-            """for wind in windows:
-                if overlap_mode == "overlapping":
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode)
-                else:
-                    model[ngram].counts[wind] = make_windows(model[ngram].bool, wi=wind, l=L, wsh=w_s_val, 
-                                                            overlap_mode=overlap_mode, min_window=w_s_val, window_expansion=w_e_val)
-                
-                model[ngram].fa[wind] = mse(model[ngram].counts[wind])
-            
-            # Підгонка кривої та обробка помилок
-            try:
-                ff = [*model[ngram].fa.values()]
-                c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
-                
-                a_val = c[0]
-                gamma_val = c[1]
-                temp_fa = [fit(w_val, a_val, gamma_val) for w_val in windows]
-                
-                # Зберігаємо результати в моделі
-                model[ngram].a = a_val
-                model[ngram].gamma = gamma_val
-                model[ngram].temp_fa = temp_fa
-                
-                r_val = round(R(dt), 8)
-                model[ngram].R = r_val
-                
-                return {
-                    'ngram': ngram,
-                    'a': round(a_val, 8),
-                    'gamma': round(gamma_val, 8),
-                    'error': round(r2_score(ff, temp_fa), 5),
-                    'R': r_val
-                }
-            except Exception as e:
-                print(f"Error in curve fitting for {ngram}: {e}")
-                model[ngram].a = 0
-                model[ngram].gamma = 0
-                model[ngram].temp_fa = [0] * len(windows)
-                r_val = round(R(dt), 8)
-                model[ngram].R = r_val
-                
-                return {
-                    'ngram': ngram,
-                    'a': 0,
-                    'gamma': 0,
-                    'error': 0,
-                    'R': r_val
-                }"""
-        
+
         # Підготовка даних для паралельної обробки
         ngram_items = [(ngram, i) for i, ngram in enumerate(df["ngram"])]
         
