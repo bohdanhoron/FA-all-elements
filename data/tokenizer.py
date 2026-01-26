@@ -77,4 +77,3 @@ class UniversalCommentDelimiterSplit(Filter):
                     yield (ttype, value)
             else:
                 yield (ttype, value)
-
