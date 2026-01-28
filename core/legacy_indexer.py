@@ -49,115 +49,56 @@ def make_dataframe(model, fmin=3):
 
 
 @memoize
-def build_static_index(data: List, order: int = 1) -> Dict[str, Ngram]:
-    """
-    Створює ланцюг Маркова з вхідних даних.
+def build_static_index(data: List, order: int = 1) -> Tuple[Dict[Any, Ngram], int, int]:
+    local_model = dict()
+    l_val = len(data) - order
     
-    Args:
-        data: Список елементів для побудови ланцюга Маркова
-        order: Порядок ланцюга Маркова (кількість попередніх елементів для прогнозу)
-        
-    Returns:
-        Dict[str, Ngram]: Модель ланцюга Маркова у вигляді словника n-грам
-    """
-    global model, L, V
+    local_model['new_ngram'] = Ngram()
+    local_model['new_ngram'].bool = np.zeros(l_val, dtype=np.uint8)
+    local_model['new_ngram'].pos = []
     
-    # Створюємо новий словник моделі
-    model = dict()
-    L = len(data) - order
-    
-    # Ініціалізуємо спеціальну n-граму для нових елементів
-    model['new_ngram'] = Ngram()
-    model['new_ngram'].bool = np.zeros(L, dtype=np.uint8)  # використовуємо uint8 для зменшення пам'яті
-    model['new_ngram'].pos = []
-    
-    # Використовуємо більш ефективний алгоритм для побудови ланцюга Маркова
     if order > 1:
-        for i in range(L - 1):
-            window = tuple(data[i: i + order])  # Додаємо в словник
+        for i in range(l_val - 1):
+            window = tuple(data[i: i + order])
             
-            if window in model:  # Приєднуємо до вже існуючого розподілу
-                model[window].update([data[i + order]])
-                model[window].pos.append(i + 1)
-                model[window].bool[i] = 1
-            else:
-                model[window] = Ngram([data[i + order]])
-                model[window].pos = []
-                model[window].pos.append(i + 1)
-                model[window].bool = np.zeros(L, dtype=np.uint8)
-                model[window].bool[i] = 1
-                model['new_ngram'].bool[i] = 1
-                model['new_ngram'].pos.append(i + 1)
+            if window not in local_model:
+                local_model[window] = Ngram()
+                local_model[window].pos = []
+                local_model[window].bool = np.zeros(l_val, dtype=np.uint8)
+                
+                local_model['new_ngram'].bool[i] = 1
+                local_model['new_ngram'].pos.append(i + 1)
+            
+            local_model[window].update([data[i + order]])
+            local_model[window].pos.append(i + 1)
+            local_model[window].bool[i] = 1
     else:
-        # Попередньо визначаємо множину унікальних елементів для оптимізації
-        # unique_items = set(data)
-        
-        # Ініціалізуємо модель для кожного унікального елемента
-        # for item in unique_items:
-        #     model[item] = Ngram()
-        #     model[item].pos = []
-        #     model[item].bool = np.zeros(L, dtype=np.uint8)
-        
-        # Заповнюємо модель
-        # for i in range(L):
-        #     item = data[i]
-        #     next_item = data[i + order]
-            
-        #     model[item].update([next_item])
-        #     model[item].pos.append(i + order)
-        #     model[item].bool[i] = 1
-
-        for i in range(L):
+        for i in range(l_val):
             item = data[i]
             next_item = data[i + order]
 
-            if item not in model:
-                model[item] = Ngram()
-                model[item].pos = []
-                model[item].bool = np.zeros(L, dtype=np.uint8)
+            if item not in local_model:
+                local_model[item] = Ngram()
+                local_model[item].pos = []
+                local_model[item].bool = np.zeros(l_val, dtype=np.uint8)
 
-                model[item].update([next_item])
-                model[item].pos.append(i + order)
-                model[item].bool[i] = 1
+                local_model['new_ngram'].pos.append(i + order)
+                local_model['new_ngram'].bool[i] = 1
 
-                model['new_ngram'].pos.append(i + order)
-                model['new_ngram'].bool[i] = 1
-
-            else:
-                model[item].update([next_item])
-                model[item].pos.append(i + order)
-                model[item].bool[i] = 1
+            local_model[item].update([next_item])
+            local_model[item].pos.append(i + order)
+            local_model[item].bool[i] = 1
         
-        if data[L] in model:
-            model[data[L]].update({data[0]: 1})
+        if data[l_val] in local_model:
+            local_model[data[l_val]].update({data[0]: 1})
         else:
-            model[data[L]] = {data[0]: 1}
+            local_model[data[l_val]] = {data[0]: 1}
 
-        # Connect the first word with the last one
-        if data[0] in model:
-            model[data[0]].update({data[L]: 1})
+        if data[0] in local_model:
+            local_model[data[0]].update({data[l_val]: 1})
         else:
-            model[data[0]] = {data[L]: 1}
-
-        # З'єднуємо останнє слово з першим та перше з останнім
+            local_model[data[0]] = {data[l_val]: 1}
         
-        """if data[L] not in model:
-            #model[data[L]] = Ngram()
-            #model[data[L]].pos = []
-            #model[data[L]].pos.append(L + order)
-            #model[data[L]].bool = np.zeros(L, dtype=np.uint8)
-            #model[data[L]].bool[L-1] = 1
-            model[data[L]].update([data[0]])
-            model['new_ngram'].pos.append(L + order)
-            model['new_ngram'].bool[L-1] = 1
-        else:
-            model[data[L]].pos.append(L + order)
-            model[data[L]].bool = np.zeros(L, dtype=np.uint8)
-            model[data[L]].bool[L-1] = 1
-        
-        model[data[0]].update([data[L]])"""
-
-    #print(sum(model['new_ngram'].bool))
-        
-    V = len(model)
-    return model
+    v_val = len(local_model)
+    
+    return local_model, l_val, v_val
