@@ -1,11 +1,106 @@
-import  numpy as np
-from typing import List, Tuple, Optional, Dict, Any, Union
+from typing import Dict, Tuple
+import numpy as np
 import pandas as pd
 
+from models.state_manager import state
 from models.ngram import Ngram
 from utils.decorators import memoize
 
-def make_dataframe(model, fmin=3):
+
+@memoize
+def make_markov_chain(data: Tuple, order: int = 1) -> Dict[str, Ngram]:
+    """
+    Створює ланцюг Маркова з вхідних даних.
+    
+    Args:
+        data: Tuple елементів для побудови ланцюга Маркова
+        order: Порядок ланцюга Маркова (кількість попередніх елементів для прогнозу)
+        
+    Returns:
+        Dict[str, Ngram]: Модель ланцюга Маркова у вигляді словника n-грам
+    """
+    model = dict()
+    L = len(data) - order
+    
+    model['new_ngram'] = Ngram()
+    model['new_ngram'].bool = np.zeros(L, dtype=np.uint8)
+    model['new_ngram'].pos = []
+    
+    if order > 1:
+        for i in range(L - 1):
+            window = tuple(data[i: i + order])
+            next_item = data[i + order]
+            
+            if window in model:
+                if next_item in model[window]:
+                    model[window][next_item] += 1
+                else:
+                    model[window][next_item] = 1
+                model[window].pos.append(i + 1)
+                model[window].bool[i] = 1
+            else:
+                model[window] = Ngram()
+                model[window][next_item] = 1
+                model[window].pos = []
+                model[window].pos.append(i + 1)
+                model[window].bool = np.zeros(L, dtype=np.uint8)
+                model[window].bool[i] = 1
+                model['new_ngram'].bool[i] = 1
+                model['new_ngram'].pos.append(i + 1)
+    else:
+        for i in range(L):
+            item = data[i]
+            next_item = data[i + order]
+
+            if item not in model:
+                model[item] = Ngram()
+                model[item].pos = []
+                model[item].bool = np.zeros(L, dtype=np.uint8)
+                
+                model[item][next_item] = 1
+                model[item].pos.append(i + order)
+                model[item].bool[i] = 1
+
+                model['new_ngram'].pos.append(i + order)
+                model['new_ngram'].bool[i] = 1
+            else:
+                if next_item in model[item]:
+                    model[item][next_item] += 1
+                else:
+                    model[item][next_item] = 1
+                model[item].pos.append(i + order)
+                model[item].bool[i] = 1
+        
+        last_item = data[L]
+        first_item = data[0]
+        
+        if last_item in model:
+            if first_item in model[last_item]:
+                model[last_item][first_item] += 1
+            else:
+                model[last_item][first_item] = 1
+        else:
+            model[last_item] = Ngram()
+            model[last_item][first_item] = 1
+            model[last_item].pos = []
+            model[last_item].bool = np.zeros(L, dtype=np.uint8)
+
+        if first_item in model:
+            if last_item in model[first_item]:
+                model[first_item][last_item] += 1
+            else:
+                model[first_item][last_item] = 1
+
+    V = len(model)
+    
+    state.model = model
+    state.L = L
+    state.V = V
+    
+    return model
+
+
+def make_dataframe(model: Dict, fmin: int = 3) -> pd.DataFrame:
     """
     Створює DataFrame для відображення результатів аналізу.
     
@@ -16,89 +111,34 @@ def make_dataframe(model, fmin=3):
     Returns:
         pd.DataFrame: DataFrame з результатами
     """
-    # Фільтруємо n-грами за мінімальною частотою
-    filtered_data = list(
-        filter(lambda x: sum(value for value in model[x].values() if isinstance(value, int)) >= fmin, model))
+    filtered_data = []
+    for ngram in model:
+        if ngram == 'new_ngram':
+            continue
+        total_count = sum(value for value in model[ngram].values() if isinstance(value, int))
+        if total_count >= fmin:
+            filtered_data.append(ngram)
     
-    # Додаємо new_ngram, якщо вона існує в моделі
-    if 'new_ngram' not in filtered_data and 'new_ngram' in model:
+    if 'new_ngram' in model:
         filtered_data.append("new_ngram")
         
-    # Створюємо структуру даних для DataFrame
     data = {"ngram": [],
             "F": np.empty(len(filtered_data), dtype=np.dtype(int))}
 
-    # Заповнюємо дані
     for i, ngram in enumerate(filtered_data):
         data["ngram"].append(ngram)
 
-        if ngram == "new_ngram" and hasattr(model[ngram], 'bool'):
-            #data['F'][i] = sum(model[ngram].bool)
-            data['F'][i] = np.sum(model[ngram].bool)
-        elif ngram == "new_ngram":
-            # Якщо атрибут bool відсутній, встановлюємо значення за замовчуванням
-            data['F'][i] = 0
+        if ngram == "new_ngram":
+            if hasattr(model[ngram], 'bool') and model[ngram].bool is not None:
+                data['F'][i] = int(np.sum(model[ngram].bool))
+            elif hasattr(model[ngram], 'pos'):
+                data['F'][i] = len(model[ngram].pos)
+            else:
+                data['F'][i] = 0
         elif hasattr(model[ngram], 'pos'):
             data["F"][i] = len(model[ngram].pos)
         else:
             data["F"][i] = 0
 
-    # Створюємо DataFrame з даних
-    dffff = pd.DataFrame(data=data)
-    return dffff
-
-
-@memoize
-def build_static_index(data: List, order: int = 1) -> Tuple[Dict[Any, Ngram], int, int]:
-    local_model = dict()
-    l_val = len(data) - order
-    
-    local_model['new_ngram'] = Ngram()
-    local_model['new_ngram'].bool = np.zeros(l_val, dtype=np.uint8)
-    local_model['new_ngram'].pos = []
-    
-    if order > 1:
-        for i in range(l_val - 1):
-            window = tuple(data[i: i + order])
-            
-            if window not in local_model:
-                local_model[window] = Ngram()
-                local_model[window].pos = []
-                local_model[window].bool = np.zeros(l_val, dtype=np.uint8)
-                
-                local_model['new_ngram'].bool[i] = 1
-                local_model['new_ngram'].pos.append(i + 1)
-            
-            local_model[window].update([data[i + order]])
-            local_model[window].pos.append(i + 1)
-            local_model[window].bool[i] = 1
-    else:
-        for i in range(l_val):
-            item = data[i]
-            next_item = data[i + order]
-
-            if item not in local_model:
-                local_model[item] = Ngram()
-                local_model[item].pos = []
-                local_model[item].bool = np.zeros(l_val, dtype=np.uint8)
-
-                local_model['new_ngram'].pos.append(i + order)
-                local_model['new_ngram'].bool[i] = 1
-
-            local_model[item].update([next_item])
-            local_model[item].pos.append(i + order)
-            local_model[item].bool[i] = 1
-        
-        if data[l_val] in local_model:
-            local_model[data[l_val]].update({data[0]: 1})
-        else:
-            local_model[data[l_val]] = {data[0]: 1}
-
-        if data[0] in local_model:
-            local_model[data[0]].update({data[l_val]: 1})
-        else:
-            local_model[data[0]] = {data[l_val]: 1}
-        
-    v_val = len(local_model)
-    
-    return local_model, l_val, v_val
+    df = pd.DataFrame(data=data)
+    return df

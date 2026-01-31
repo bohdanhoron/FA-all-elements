@@ -1,46 +1,8 @@
+from typing import List, Tuple, Optional
 import numpy as np
-from numba import jit, njit, prange
-from typing import List, Tuple, Optional, Dict, Any, Union
 
-from math_utils import calc_non_overlapping_shift, make_windows, s
-from statistics import mse
-
-
-def calculate_window_positions(wi, wh, l, overlap_mode, min_window, window_expansion):
-
-    if overlap_mode == "overlapping":
-        window_positions = range(0, l - wi, wh)
-    else:
-        # Non-overlapping режим
-        if min_window is None:
-            min_window = wh
-        if window_expansion is None:
-            window_expansion = wh
-
-        # Оцінюємо кількість і розташування вікон
-        k = 1
-        i = 0
-        window_positions = []
-        while i < l - wi:
-            window_positions.append(i)
-            shift = calc_non_overlapping_shift(k, min_window, window_expansion)
-            i += shift
-            k += 1
-
-    return list(window_positions)
-
-def calculate_rms(x, wi, l, wsh, overlap_mode, min_window, window_expansion):
-    if overlap_mode == "overlapping":
-        # print('overlapping')
-        # print('  model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode', model[ngram].bool, wind, L, w_s_val, overlap_mode)
-        rms = make_windows(x, wi=wi, l=l, wsh=wsh, overlap_mode=overlap_mode)
-    else:
-        # print('NOT overlapping')
-        # print('  model[ngram].bool, wi=wind, l=L, wsh=w_s_val, overlap_mode=overlap_mode min_window=w_s_val, window_expansion=w_e_val', model[ngram].bool, wind, L, w_s_val, overlap_mode, w_s_val, w_e_val)
-        rms = make_windows(x, wi=wi, l=l, wsh=wsh, overlap_mode=overlap_mode, min_window=min_window, window_expansion=window_expansion)
-
-    fa = mse(rms)
-    return rms, fa
+from core.math_utils import calculate_window_positions, s, make_windows
+from core.statistics import mse
 
 
 def fa(data: List, args: Tuple[int, int, int],
@@ -48,7 +10,7 @@ def fa(data: List, args: Tuple[int, int, int],
        min_window: Optional[int] = None, 
        window_expansion: Optional[int] = None):
     """
-    Виконує аналіз флуктуацій (DFA) для даних.
+    Виконує аналіз флуктуацій (FA) для даних.
 
     Args:
         data: Вхідні дані для аналізу
@@ -58,7 +20,7 @@ def fa(data: List, args: Tuple[int, int, int],
         window_expansion: Значення розширення вікна для режиму non-overlapping
         
     Returns:
-        np.ndarray: Масив результатів DFA аналізу
+        Tuple[np.ndarray, float]: Масив результатів та значення FA
     """
     wi, wh, l = args
 
@@ -76,6 +38,32 @@ def fa(data: List, args: Tuple[int, int, int],
                 x.append(1)
         count[index] = s(np.array(x, dtype=np.uint8))
 
-    fa = float(mse(count))
+    fa_value = float(mse(count))
 
-    return count, fa
+    return count, fa_value
+
+
+def calculate_rms(x, wi, l, wsh, overlap_mode, min_window, window_expansion):
+    """
+    Обчислює RMS (Root Mean Square) для заданих параметрів вікна.
+    
+    Args:
+        x: Вхідний масив даних
+        wi: Розмір вікна
+        l: Довжина даних
+        wsh: Зсув вікна
+        overlap_mode: Режим перекриття
+        min_window: Мінімальний розмір вікна
+        window_expansion: Розширення вікна
+        
+    Returns:
+        Tuple[np.ndarray, float]: RMS масив та FA значення
+    """
+    if overlap_mode == "overlapping":
+        rms = make_windows(x, wi=wi, l=l, wsh=wsh, overlap_mode=overlap_mode)
+    else:
+        rms = make_windows(x, wi=wi, l=l, wsh=wsh, overlap_mode=overlap_mode, 
+                          min_window=min_window, window_expansion=window_expansion)
+
+    fa_value = mse(rms)
+    return rms, fa_value

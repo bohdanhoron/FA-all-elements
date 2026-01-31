@@ -1,6 +1,6 @@
 import numpy as np
 from numba import jit, njit, prange
-from typing import List, Tuple, Optional, Dict, Any, Union
+from typing import  Optional
 
 def calculate_distance(positions: np.ndarray, L: int, option: str, ngram: str, min_dist: int = 1) -> np.ndarray:
     """
@@ -18,10 +18,8 @@ def calculate_distance(positions: np.ndarray, L: int, option: str, ngram: str, m
     Returns:
         np.ndarray: Масив відстаней між елементами
     """
-    # Оптимізуємо обробку масиву позицій
     positions = np.array(positions, dtype=np.int32)
-    
-    # Переконуємося, що min_dist є цілим числом
+
     if not isinstance(min_dist, int):
         try:
             min_dist = int(min_dist)
@@ -29,12 +27,11 @@ def calculate_distance(positions: np.ndarray, L: int, option: str, ngram: str, m
             print(f"Warning: min_dist '{min_dist}' is not an integer. Using default min_dist=1")
             min_dist = 1
     
-    # Використовуємо оптимізовані функції відповідно до граничних умов
     if option == "no":
         distances = nbc(positions, L, min_dist)
     elif option == "periodic":
         distances = pbc(positions, L, min_dist)
-    else:  # "ordinary"
+    else: 
         distances = obc(positions, L, min_dist)
     
     return distances
@@ -88,7 +85,6 @@ def pbc(pos, L, min_dist=1):
         if min_dist==0:
             dt[i] -= 1
     
-    # Останній елемент обчислюємо окремо через періодичність
     dt[n - 1] = L - pos[n - 1] + pos[0]
     if min_dist==0:
         dt[n - 1] -= 1
@@ -122,8 +118,7 @@ def obc(pos, L, min_dist=1):
         dt[i] = pos[i + 1] - pos[i]
         if min_dist==0:
             dt[i] -= 1
-    
-    # Останній елемент обчислюємо окремо
+ 
     dt[n - 1] = L - pos[n - 1]
     if min_dist==0:
         dt[n - 1] -= 1
@@ -142,7 +137,6 @@ def s(window: np.ndarray) -> int:
     Returns:
         int: Сума значень
     """
-    # Використовуємо оптимізовану NumPy функцію
     return np.sum(window)
 
 
@@ -152,7 +146,6 @@ def calc_non_overlapping_shift(k, min_window, window_expansion):
     Розраховує зміщення для режиму non-overlapping
     k - номер кроку (починаючи з 1)
     """
-    # Numba не працює з None значеннями, тому перевірка робиться в make_windows
     if k == 1:
         return min_window
     else:
@@ -211,6 +204,41 @@ def make_windows(x: np.ndarray, wi: int, l: int, wsh: int,
     
     return sums
 
+def calculate_window_positions(wi, wh, l, overlap_mode, min_window, window_expansion):
+    """
+    Обчислює позиції вікон для аналізу.
+    
+    Args:
+        wi: Розмір вікна
+        wh: Зсув вікна
+        l: Довжина даних
+        overlap_mode: Режим перекриття
+        min_window: Мінімальний розмір вікна
+        window_expansion: Розширення вікна
+        
+    Returns:
+        list: Список позицій вікон
+    """
+    if overlap_mode == "overlapping":
+        window_positions = range(0, l - wi, wh)
+    else:
+        # Non-overlapping режим
+        if min_window is None:
+            min_window = wh
+        if window_expansion is None:
+            window_expansion = wh
+
+        # Оцінюємо кількість і розташування вікон
+        k = 1
+        i = 0
+        window_positions = []
+        while i < l - wi:
+            window_positions.append(i)
+            shift = calc_non_overlapping_shift(k, min_window, window_expansion)
+            i += shift
+            k += 1
+
+    return list(window_positions)
 
 @njit(fastmath=True)
 def calc_sum(x):
@@ -218,3 +246,7 @@ def calc_sum(x):
     for i, w in enumerate(x):
         sums[i] = np.sum(w)
     return sums
+
+@jit(nopython=True, fastmath=True)
+def fit(x, a, b):
+    return a * (x ** b)

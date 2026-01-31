@@ -1,32 +1,52 @@
-import pandas as pd
-from typing import Dict, Any, List, Optional
-from models.ngram import Ngram, newNgram
+import threading
+
 
 class StateManager:
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(StateManager, cls).__new__(cls)
-            cls._instance._init_state()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialize()
         return cls._instance
 
-    def _init_state(self):
-        self.uploaded_files: Dict[str, str] = {}
-        self.file_lengths: Dict[str, Dict[str, int]] = {}
-        self.batch_results: List[Dict[str, Any]] = []
-        self.model: Dict[Any, Ngram] = {}
-        self.df: Optional[pd.DataFrame] = None
-        self.data: List[Any] = []
-        self.new_ngram: Optional[newNgram] = None
-        self.save_folder: Optional[str] = None
-        self.L: int = 0
-        self.V: int = 0
-
-    def reset_analysis_state(self):
+    def _initialize(self):
+        """Ініціалізація всіх полів стану."""
         self.model = {}
         self.df = None
+        self.data = None
+        self.L = 0
+        self.V = 0
         self.new_ngram = None
-        self.data = []
+        self.uploaded_files = {}
+        self.file_lengths = {}
+        self.batch_results = []
+        
+        # UI state
+        self.toast_visible = False
+        self.error_visible = False
+        self.analyze_visible = False
+        self.length_updated = False
+        self.clicked_ngram = None
+        self.save_folder = None
 
-state_manager = StateManager()
+    def reset(self):
+        """Скидає стан до початкового."""
+        self._initialize()
+
+    def clear_model(self):
+        """Очищує модель."""
+        if isinstance(self.model, dict):
+            self.model.clear()
+        self.model = {}
+
+    def clear_data(self):
+        """Очищує дані."""
+        self.data = None
+        self.df = None
+        self.new_ngram = None
+
+state = StateManager()
