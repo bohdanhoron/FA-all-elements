@@ -36,7 +36,7 @@ def calculate_distance(positions: np.ndarray, L: int, option: str, ngram: str, m
     
     return distances
 
-@njit(parallel=True)
+@njit(fastmath=True)
 def nbc(pos, L, min_dist=1):
     """
     Обчислює відстані без граничних умов.
@@ -92,7 +92,7 @@ def pbc(pos, L, min_dist=1):
     return dt
 
 
-@njit(parallel=True)
+@njit(fastmath=True)
 def obc(pos, L, min_dist=1):
     """
     Обчислює відстані зі звичайними граничними умовами.
