@@ -62,7 +62,7 @@ def nbc(pos, L, min_dist=1):
     return dt
 
 
-@njit(parallel=True)
+@njit(fastmath=True)
 def pbc(pos, L, min_dist=1):
     """
     Обчислює відстані з періодичними граничними умовами.
