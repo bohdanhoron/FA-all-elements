@@ -4,7 +4,7 @@ from numba import jit, njit
 
 
 @njit(fastmath=True)
-def mse(x: np.ndarray) -> float:
+def rmse(x: np.ndarray) -> float:
     """
     Обчислює середньоквадратичну похибку (MSE) набору значень.
     

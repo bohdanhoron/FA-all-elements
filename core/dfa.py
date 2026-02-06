@@ -27,32 +27,30 @@ def dfa(data: List, args: Tuple[int, int, int],
     """
     wi, wh, l = args
 
+    # Побудова глобального бінарного ряду новизни
+    seen = set()
+    novelty = []
+    for ngram in data:
+        is_new = ngram not in seen
+        novelty.append(1.0 if is_new else 0.0)
+        if is_new:
+            seen.add(ngram)
+    novelty = np.asarray(novelty, dtype=np.float64)
+
+    # Інтегрований центрований ряд
+    y_full = np.cumsum(novelty - np.mean(novelty))
+
     window_positions = calculate_window_positions(wi, wh, l, overlap_mode, min_window, window_expansion)
-    count = np.zeros(len(window_positions), dtype=np.uint16)
+    count = np.zeros(len(window_positions), dtype=np.float64)
+    scale_ax = np.arange(wi)
 
     for index, i in enumerate(window_positions):
-        temp_v = []
-        x = []
-        for ngram in data[i:i + wi]:
-            if ngram in temp_v:
-                x.append(0)
-            else:
-                temp_v.append(ngram)
-                x.append(1)
-
-        x = np.array(x)
-
-        y = np.cumsum(x - np.mean(x))
-
-        scale_ax = np.arange(wi)
-
-        coefs = poly.polyfit(scale_ax, y, polynom_degree)
+        y_win = y_full[i:i + wi]
+        coefs = poly.polyfit(scale_ax, y_win, polynom_degree)
         xfit = poly.polyval(scale_ax, coefs)
+        count[index] = np.sqrt(np.mean((y_win - xfit) ** 2))
 
-        count[index] = np.sqrt(np.mean((y - xfit) ** 2))
-
-    dfa_value = np.mean(np.sqrt(count ** 2))
-
+    dfa_value = np.sqrt(np.mean(count ** 2))
     return count, dfa_value
 
 
@@ -75,7 +73,7 @@ def calculate_rmsd(x, wi, polynom_degree):
     shape = (y.shape[0] // wi, wi)
     X = np.lib.stride_tricks.as_strided(y, shape=shape)
     scale_ax = np.arange(wi)
-    rms = np.zeros(X.shape[0])
+    rms = np.zeros(X.shape[0], dtype=np.float64)
     for e, xcut in enumerate(X):
         coeffs = np.polyfit(scale_ax, xcut, i)
         trend = np.polyval(coeffs, scale_ax)
