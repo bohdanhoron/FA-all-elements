@@ -735,25 +735,29 @@ def register_callbacks(app):
 
             L = len(data)
             
+            # Align window calculations with single-file flow (dynamic uses /10, static uses /20)
             if batch_window_mode == "ui":
-                wm_val = int(w_max) if w_max is not None else int(L / 20)
-                w_val = int(w_s) if w_s is not None else int(wm_val / 20)
-                wh_val = int(w_s) if w_s is not None else w_val
-                we_val = int(w_e) if w_e is not None else w_val
+                default_w_max = int(L / 10) if definition == "dynamic" else int(L / 20)
+                w_max_val = int(w_max) if w_max is not None else default_w_max
+
+                if definition == "dynamic":
+                    default_w_s = int(w_max_val / 10)
+                else:
+                    default_w_s = int(w_max_val / 20)
+
+                w_s_val = int(w_s) if w_s is not None else default_w_s
+                w_e_val = int(w_e) if w_e is not None else w_s_val
             else:
                 if definition == "dynamic":
-                    wm_val = int(L / 20)
-                    w_val = int(wm_val / 20)
+                    w_max_val = int(L / 10)
+                    w_s_val = int(w_max_val / 10)
                 else:
-                    wm_val = int(L / 20)
-                    w_val = int(wm_val / 20)
-                wh_val = w_val
-                we_val = w_val
-                
-            wm_val = max(10, wm_val)
-            w_val = max(5, w_val)
-            wh_val = max(1, wh_val)
-            we_val = max(1, we_val)
+                    w_max_val = int(L / 20)
+                    w_s_val = int(w_max_val / 20)
+                w_e_val = w_s_val
+
+            if w_e_val == 0:
+                w_e_val = 5
             
             # Build local model
             for i in range(L - n_size + 1):
@@ -786,7 +790,7 @@ def register_callbacks(app):
                 temp_error = []
                 temp_a = []
 
-                windows = list(range(w_val, wm_val + 1, we_val))
+                windows = list(range(w_s_val, w_max_val + 1, w_e_val))
                 
                 for i, row in current_df.iterrows():
                     ngram = row['ngram']
@@ -806,9 +810,9 @@ def register_callbacks(app):
                         if algo_selector == '2':
                             rms, fa_val = calculate_rmsd(local_model[ngram].bool, wi=wind, polynom_degree=polynom_degree)
                         else:
-                            rms, fa_val = calculate_rms(local_model[ngram].bool, wi=wind, l=L, wsh=wh_val, 
-                                                       overlap_mode=overlap_mode, min_window=w_val, 
-                                                       window_expansion=we_val)
+                            rms, fa_val = calculate_rms(local_model[ngram].bool, wi=wind, l=L, wsh=w_s_val, 
+                                                       overlap_mode=overlap_mode, min_window=w_s_val, 
+                                                       window_expansion=w_e_val)
                         local_model[ngram].counts[wind] = rms
                         local_model[ngram].fa[wind] = fa_val
 
@@ -818,7 +822,7 @@ def register_callbacks(app):
                         c, _ = curve_fit(fit, windows, ff, method='lm', maxfev=5000)
                         a_val = c[0]
                         gamma_val = c[1]
-                        temp_fa = [fit(w_val, c[0], c[1]) for w_val in windows]
+                        temp_fa = [fit(w_point, c[0], c[1]) for w_point in windows]
                         temp_error.append(round(r2_score(ff, temp_fa), 5))
                         temp_gamma.append(round(gamma_val, 8))
                         temp_a.append(round(a_val, 8))
@@ -866,13 +870,6 @@ def register_callbacks(app):
                 del current_df, df_filtered, temp_gamma, temp_R, temp_error, temp_a
 
             elif definition == "dynamic":
-                w_max_val = int(L / 20)
-                w_s_val = int(w_max_val / 20)
-                w_e_val = w_s_val
-                
-                if w_e_val == 0:
-                    w_e_val = 5
-                
                 windows = list(range(w_s_val, w_max_val + 1, w_e_val))
 
                 local_new_ngram = newNgram(data, w_s_val, L)
