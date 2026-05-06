@@ -102,7 +102,17 @@ def register_callbacks(app):
                                 continue
                             letters.append(i)
                     state.file_lengths[filename]['letter'] = len(letters)
-                    
+
+                    # Float length
+                    float_tokens = []
+                    for t in file_content.split():
+                        try:
+                            float(t)
+                            float_tokens.append(t)
+                        except ValueError:
+                            pass
+                    state.file_lengths[filename]['float'] = len(float_tokens)
+
                     success_count += 1
                 except UnicodeDecodeError:
                     error_count += 1
@@ -152,8 +162,8 @@ def register_callbacks(app):
             data = prepare_data(file, n, split, selected_filename, computer_code, ignore_comments)
             state.data = data
             state.L = len(data)
-            w_max = int(state.L / 10)
-            w_min = int(w_max / 10)
+            w_max = int(state.L / 20)
+            w_min = int(w_max / 20)
         else:
             if split == "letter":
                 temp = []
@@ -186,21 +196,34 @@ def register_callbacks(app):
                 data = processor.get_words()
                 state.L = len(data)
 
+            elif split == "float":
+                float_tokens = []
+                for t in file.split():
+                    try:
+                        float(t)
+                        float_tokens.append(t)
+                    except ValueError:
+                        pass
+                data = float_tokens
+                state.L = len(data)
+
             state.data = data
             state.file_lengths[selected_filename][split] = state.L
-            w_max = int(state.L / 20)
-            w_min = int(w_max / 20)
-        
+            w_max = int(state.L / 40)
+            w_min = max(1, int(w_max / 40))
+
         length_elements = [html.Strong("Length:")]
         lengths = state.file_lengths[selected_filename]
-        
+
         if 'word' in lengths:
             length_elements.append(html.Div(f"words: {lengths['word']}"))
         if 'symbol' in lengths:
             length_elements.append(html.Div(f"symbols: {lengths['symbol']}"))
         if 'letter' in lengths:
             length_elements.append(html.Div(f"letters&numbers: {lengths['letter']}"))
-            
+        if 'float' in lengths:
+            length_elements.append(html.Div(f"floats: {lengths['float']}"))
+
         return length_elements, w_min, w_min, w_min, w_max
 
     @app.callback(
@@ -1205,3 +1228,12 @@ def register_callbacks(app):
     )
     def toggle_batch_window_controls(mode):
         return mode in ["ui", "auto"]
+
+    @app.callback(
+        Output("float-warning", "style"),
+        Input("split", "value")
+    )
+    def toggle_float_warning(split):
+        if split == "float":
+            return {"color": "red", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+        return {"display": "none"}

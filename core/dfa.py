@@ -10,7 +10,8 @@ def dfa(data: List, args: Tuple[int, int, int],
         overlap_mode: str = "overlapping",
         min_window: Optional[int] = None,
         window_expansion: Optional[int] = None,
-        polynom_degree: int = 1):
+        polynom_degree: int = 1,
+        raw: bool = False):
     """
     Виконує DETRENDED аналіз флуктуацій (DFA) для даних.
 
@@ -21,21 +22,26 @@ def dfa(data: List, args: Tuple[int, int, int],
         min_window: Мінімальний розмір вікна
         window_expansion: Значення розширення вікна
         polynom_degree: Степінь полінома для детрендінгу
-        
+        raw: Якщо True — використовує float значення напряму (для float режиму)
+
     Returns:
         Tuple[np.ndarray, float]: Масив результатів та значення DFA
     """
     wi, wh, l = args
 
-    # Побудова глобального бінарного ряду новизни
-    seen = set()
-    novelty = []
-    for ngram in data:
-        is_new = ngram not in seen
-        novelty.append(1.0 if is_new else 0.0)
-        if is_new:
-            seen.add(ngram)
-    novelty = np.asarray(novelty, dtype=np.float64)
+    if raw:
+        # Float режим: використовуємо значення напряму
+        novelty = np.asarray(data, dtype=np.float64)
+    else:
+        # Побудова глобального бінарного ряду новизни
+        seen = set()
+        novelty = []
+        for ngram in data:
+            is_new = ngram not in seen
+            novelty.append(1.0 if is_new else 0.0)
+            if is_new:
+                seen.add(ngram)
+        novelty = np.asarray(novelty, dtype=np.float64)
 
     # Інтегрований центрований ряд
     y_full = np.cumsum(novelty - np.mean(novelty))

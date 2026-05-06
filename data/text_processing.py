@@ -118,6 +118,16 @@ def prepare_data(data: str, n: int, split: str, filename: str, computer_code: bo
                 else:
                     result.append(char.lower())
             return result
+
+        elif split == 'float':
+            tokens = data.split()
+            result = []
+            for t in tokens:
+                try:
+                    result.append(float(t))
+                except ValueError:
+                    pass
+            return result
     else:
         if split == "word":
             data = re.sub(r'--', ' -', data)

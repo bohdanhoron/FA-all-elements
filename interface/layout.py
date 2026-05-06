@@ -174,12 +174,18 @@ layout = html.Div([
                                                     {"label": "word", "value": "word"},
                                                     {"label": "letter&number", "value": "letter"},
                                                     {"label": "symbol", "value": "symbol"},
+                                                    {"label": "float", "value": "float"},
                                                 ],
                                                 value="word"
                                             )
-                                        ], 
-                                        size="md", 
+                                        ],
+                                        size="md",
                                         className="mb-2"
+                                    ),
+                                    html.Div(
+                                        "В режимі float розмір n-gram = 1",
+                                        id="float-warning",
+                                        style={"color": "red", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
                                     ),
                                     dbc.InputGroup(
                                         [
