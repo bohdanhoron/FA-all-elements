@@ -91,6 +91,16 @@ def prepare_data(data: str, n: int, split: str, filename: str, computer_code: bo
         data = re.sub(r'\n\s\s', '\n', data)
         data = re.sub(r'﻿', '', data)
     
+    if split == 'float':
+        tokens = data.split()
+        result = []
+        for t in tokens:
+            try:
+                result.append(float(t))
+            except ValueError:
+                pass
+        return result
+
     if n == 1:
         if split == "word":
             if not computer_code:
@@ -99,7 +109,7 @@ def prepare_data(data: str, n: int, split: str, filename: str, computer_code: bo
             processor.preprocess(data, file_name=filename)
             result = processor.get_words()
             return result
-            
+
         elif split == 'letter':
             temp = []
             data = remove_punctuation(data)
@@ -119,15 +129,6 @@ def prepare_data(data: str, n: int, split: str, filename: str, computer_code: bo
                     result.append(char.lower())
             return result
 
-        elif split == 'float':
-            tokens = data.split()
-            result = []
-            for t in tokens:
-                try:
-                    result.append(float(t))
-                except ValueError:
-                    pass
-            return result
     else:
         if split == "word":
             data = re.sub(r'--', ' -', data)

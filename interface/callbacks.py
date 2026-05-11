@@ -143,17 +143,20 @@ def register_callbacks(app):
          Output('w_min', 'value'),
          Output('w_s', 'value'),
          Output('w_e', 'value'),
-         Output('w_max', 'value')],
+         Output('w_max', 'value'),
+         Output('float-int-warning', 'children'),
+         Output('float-int-warning', 'style')],
         [Input('file-selector', 'value'),
          Input('split', 'value'),
          Input('mode-selector', 'value'),
-         Input('comments-selector', 'value')],
-        [State('def', 'value'),
-         State('n_size', 'value')]
+         Input('comments-selector', 'value'),
+         Input('def', 'value')],
+        [State('n_size', 'value')]
     )
     def process_selected_file(selected_filename, split, processor_mode, ignore_comments, definition, n):
+        int_warn_hidden = {"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
         if selected_filename is None or selected_filename not in state.uploaded_files:
-            return no_update, no_update, no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update, no_update, "", int_warn_hidden
         
         file = state.uploaded_files[selected_filename]
         computer_code = True if processor_mode == 'computer_code' else False
@@ -200,8 +203,7 @@ def register_callbacks(app):
                 float_tokens = []
                 for t in file.split():
                     try:
-                        float(t)
-                        float_tokens.append(t)
+                        float_tokens.append(float(t))
                     except ValueError:
                         pass
                 data = float_tokens
@@ -224,7 +226,15 @@ def register_callbacks(app):
         if 'float' in lengths:
             length_elements.append(html.Div(f"floats: {lengths['float']}"))
 
-        return length_elements, w_min, w_min, w_min, w_max
+        int_warn_children = ""
+        int_warn_style = {"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+        if split == "float" and state.data:
+            float_vals = state.data if isinstance(state.data[0], float) else []
+            if float_vals and all(v == int(v) for v in float_vals):
+                int_warn_children = f'у файлі "{selected_filename}" всі числа int'
+                int_warn_style = {"color": "orange", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+
+        return length_elements, w_min, w_min, w_min, w_max, int_warn_children, int_warn_style
 
     @app.callback(
         [Output("table", "data"),

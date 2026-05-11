@@ -187,6 +187,11 @@ layout = html.Div([
                                         id="float-warning",
                                         style={"color": "red", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
                                     ),
+                                    html.Div(
+                                        "",
+                                        id="float-int-warning",
+                                        style={"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+                                    ),
                                     dbc.InputGroup(
                                         [
                                             dbc.Select(
