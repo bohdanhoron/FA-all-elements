@@ -277,6 +277,11 @@ layout = html.Div([
                                         ], className="text-muted mb-2 d-block text-center"),
                                     ], style={"background": "#f0f8ff", "padding": "6px", "borderRadius": "5px", "marginBottom": "10px"}),
 
+                                    html.Div(
+                                        "Мінімальний розмір вікна: 8",
+                                        id="window-size-warning",
+                                        style={"color": "red", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+                                    ),
                                     dbc.InputGroup([
                                         dbc.InputGroupText("Min Window",
                                                          style={"background-color": "#e9f5fe", 'minWidth': '40%', 'whiteSpace':'nowrap'}),

@@ -165,8 +165,8 @@ def register_callbacks(app):
             data = prepare_data(file, n, split, selected_filename, computer_code, ignore_comments)
             state.data = data
             state.L = len(data)
-            w_max = int(state.L / 20)
-            w_min = int(w_max / 20)
+            w_max = max(8, int(state.L / 20))
+            w_min = max(8, int(w_max / 20))
         else:
             if split == "letter":
                 temp = []
@@ -211,8 +211,8 @@ def register_callbacks(app):
 
             state.data = data
             state.file_lengths[selected_filename][split] = state.L
-            w_max = int(state.L / 40)
-            w_min = max(1, int(w_max / 40))
+            w_max = max(8, int(state.L / 40))
+            w_min = max(8, int(w_max / 40))
 
         length_elements = [html.Strong("Length:")]
         lengths = state.file_lengths[selected_filename]
@@ -1247,3 +1247,15 @@ def register_callbacks(app):
         if split == "float":
             return {"color": "red", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
         return {"display": "none"}
+
+    @app.callback(
+        Output("window-size-warning", "style"),
+        [Input("w_min", "value"),
+         Input("w_s", "value")]
+    )
+    def toggle_window_size_warning(w_min, w_s):
+        show = {"color": "red", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+        hide = {"display": "none"}
+        if (w_min is not None and w_min < 8) or (w_s is not None and w_s < 8):
+            return show
+        return hide
