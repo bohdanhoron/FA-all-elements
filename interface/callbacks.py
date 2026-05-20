@@ -211,8 +211,12 @@ def register_callbacks(app):
 
             state.data = data
             state.file_lengths[selected_filename][split] = state.L
-            w_max = max(8, int(state.L / 40))
-            w_min = max(8, int(w_max / 40))
+            if split == "float":
+                w_max = max(8, int(state.L / 20))
+                w_min = max(8, int(w_max / 20))
+            else:
+                w_max = max(8, int(state.L / 40))
+                w_min = max(8, int(w_max / 40))
 
         length_elements = [html.Strong("Length:")]
         lengths = state.file_lengths[selected_filename]
@@ -276,11 +280,14 @@ def register_callbacks(app):
         
         data = state.data
         L = state.L
-        
+
         if data is None or L == 0:
             return (no_update, no_update, {"display": "none"}, {"display": "none"},
                     no_update, no_update, no_update, True)
-                    
+
+        if split == "float":
+            definition = "dynamic"
+
         if definition == "dynamic":
             start = time()
             
@@ -1247,6 +1254,15 @@ def register_callbacks(app):
         if split == "float":
             return {"color": "red", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
         return {"display": "none"}
+
+    @app.callback(
+        Output("float-static-warning", "style"),
+        Input("split", "value")
+    )
+    def toggle_float_static_warning(split):
+        show = {"color": "orange", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+        hide = {"display": "none"}
+        return show if split == "float" else hide
 
     @app.callback(
         Output("window-size-warning", "style"),

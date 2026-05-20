@@ -250,6 +250,11 @@ layout = html.Div([
                                         ], size="md", className="mb-2"
                                     ),
                                     
+                                    html.Div(
+                                        "В режимі float static та dynamic використовують однаковий алгоритм",
+                                        id="float-static-warning",
+                                        style={"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+                                    ),
                                     dbc.InputGroup(
                                         [
                                             dbc.Select(
