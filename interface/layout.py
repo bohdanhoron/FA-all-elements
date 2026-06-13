@@ -174,12 +174,23 @@ layout = html.Div([
                                                     {"label": "word", "value": "word"},
                                                     {"label": "letter&number", "value": "letter"},
                                                     {"label": "symbol", "value": "symbol"},
+                                                    {"label": "float", "value": "float"},
                                                 ],
                                                 value="word"
                                             )
-                                        ], 
-                                        size="md", 
+                                        ],
+                                        size="md",
                                         className="mb-2"
+                                    ),
+                                    html.Div(
+                                        "В режимі float розмір n-gram = 1",
+                                        id="float-warning",
+                                        style={"color": "red", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+                                    ),
+                                    html.Div(
+                                        "",
+                                        id="float-int-warning",
+                                        style={"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
                                     ),
                                     dbc.InputGroup(
                                         [
@@ -239,6 +250,11 @@ layout = html.Div([
                                         ], size="md", className="mb-2"
                                     ),
                                     
+                                    html.Div(
+                                        "В режимі float static та dynamic використовують однаковий алгоритм",
+                                        id="float-static-warning",
+                                        style={"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+                                    ),
                                     dbc.InputGroup(
                                         [
                                             dbc.Select(
@@ -266,6 +282,11 @@ layout = html.Div([
                                         ], className="text-muted mb-2 d-block text-center"),
                                     ], style={"background": "#f0f8ff", "padding": "6px", "borderRadius": "5px", "marginBottom": "10px"}),
 
+                                    html.Div(
+                                        "Мінімальний розмір вікна: 8",
+                                        id="window-size-warning",
+                                        style={"color": "red", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+                                    ),
                                     dbc.InputGroup([
                                         dbc.InputGroupText("Min Window",
                                                          style={"background-color": "#e9f5fe", 'minWidth': '40%', 'whiteSpace':'nowrap'}),

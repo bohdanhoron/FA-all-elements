@@ -102,7 +102,17 @@ def register_callbacks(app):
                                 continue
                             letters.append(i)
                     state.file_lengths[filename]['letter'] = len(letters)
-                    
+
+                    # Float length
+                    float_tokens = []
+                    for t in file_content.split():
+                        try:
+                            float(t)
+                            float_tokens.append(t)
+                        except ValueError:
+                            pass
+                    state.file_lengths[filename]['float'] = len(float_tokens)
+
                     success_count += 1
                 except UnicodeDecodeError:
                     error_count += 1
@@ -133,17 +143,20 @@ def register_callbacks(app):
          Output('w_min', 'value'),
          Output('w_s', 'value'),
          Output('w_e', 'value'),
-         Output('w_max', 'value')],
+         Output('w_max', 'value'),
+         Output('float-int-warning', 'children'),
+         Output('float-int-warning', 'style')],
         [Input('file-selector', 'value'),
          Input('split', 'value'),
          Input('mode-selector', 'value'),
-         Input('comments-selector', 'value')],
-        [State('def', 'value'),
-         State('n_size', 'value')]
+         Input('comments-selector', 'value'),
+         Input('def', 'value')],
+        [State('n_size', 'value')]
     )
     def process_selected_file(selected_filename, split, processor_mode, ignore_comments, definition, n):
+        int_warn_hidden = {"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
         if selected_filename is None or selected_filename not in state.uploaded_files:
-            return no_update, no_update, no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update, no_update, "", int_warn_hidden
         
         file = state.uploaded_files[selected_filename]
         computer_code = True if processor_mode == 'computer_code' else False
@@ -152,8 +165,8 @@ def register_callbacks(app):
             data = prepare_data(file, n, split, selected_filename, computer_code, ignore_comments)
             state.data = data
             state.L = len(data)
-            w_max = int(state.L / 10)
-            w_min = int(w_max / 10)
+            w_max = max(8, int(state.L / 20))
+            w_min = max(8, int(w_max / 20))
         else:
             if split == "letter":
                 temp = []
@@ -186,22 +199,46 @@ def register_callbacks(app):
                 data = processor.get_words()
                 state.L = len(data)
 
+            elif split == "float":
+                float_tokens = []
+                for t in file.split():
+                    try:
+                        float_tokens.append(float(t))
+                    except ValueError:
+                        pass
+                data = float_tokens
+                state.L = len(data)
+
             state.data = data
             state.file_lengths[selected_filename][split] = state.L
-            w_max = int(state.L / 20)
-            w_min = int(w_max / 20)
-        
+            if split == "float":
+                w_max = max(8, int(state.L / 20))
+                w_min = max(8, int(w_max / 20))
+            else:
+                w_max = max(8, int(state.L / 40))
+                w_min = max(8, int(w_max / 40))
+
         length_elements = [html.Strong("Length:")]
         lengths = state.file_lengths[selected_filename]
-        
+
         if 'word' in lengths:
             length_elements.append(html.Div(f"words: {lengths['word']}"))
         if 'symbol' in lengths:
             length_elements.append(html.Div(f"symbols: {lengths['symbol']}"))
         if 'letter' in lengths:
             length_elements.append(html.Div(f"letters&numbers: {lengths['letter']}"))
-            
-        return length_elements, w_min, w_min, w_min, w_max
+        if 'float' in lengths:
+            length_elements.append(html.Div(f"floats: {lengths['float']}"))
+
+        int_warn_children = ""
+        int_warn_style = {"color": "orange", "fontSize": "12px", "display": "none", "marginBottom": "5px"}
+        if split == "float" and state.data:
+            float_vals = state.data if isinstance(state.data[0], float) else []
+            if float_vals and all(v == int(v) for v in float_vals):
+                int_warn_children = f'у файлі "{selected_filename}" всі числа int'
+                int_warn_style = {"color": "orange", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+
+        return length_elements, w_min, w_min, w_min, w_max, int_warn_children, int_warn_style
 
     @app.callback(
         [Output("table", "data"),
@@ -243,11 +280,14 @@ def register_callbacks(app):
         
         data = state.data
         L = state.L
-        
+
         if data is None or L == 0:
             return (no_update, no_update, {"display": "none"}, {"display": "none"},
                     no_update, no_update, no_update, True)
-                    
+
+        if split == "float":
+            definition = "dynamic"
+
         if definition == "dynamic":
             start = time()
             
@@ -1205,3 +1245,33 @@ def register_callbacks(app):
     )
     def toggle_batch_window_controls(mode):
         return mode in ["ui", "auto"]
+
+    @app.callback(
+        Output("float-warning", "style"),
+        Input("split", "value")
+    )
+    def toggle_float_warning(split):
+        if split == "float":
+            return {"color": "red", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+        return {"display": "none"}
+
+    @app.callback(
+        Output("float-static-warning", "style"),
+        Input("split", "value")
+    )
+    def toggle_float_static_warning(split):
+        show = {"color": "orange", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+        hide = {"display": "none"}
+        return show if split == "float" else hide
+
+    @app.callback(
+        Output("window-size-warning", "style"),
+        [Input("w_min", "value"),
+         Input("w_s", "value")]
+    )
+    def toggle_window_size_warning(w_min, w_s):
+        show = {"color": "red", "fontSize": "12px", "display": "block", "marginBottom": "5px"}
+        hide = {"display": "none"}
+        if (w_min is not None and w_min < 8) or (w_s is not None and w_s < 8):
+            return show
+        return hide

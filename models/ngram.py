@@ -64,9 +64,11 @@ class newNgram:
             window_expansion = self.wh
 
         if algo_selector == '2':
-            count, fa_val = dfa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion, int(polynom_degree))
+            raw = isinstance(self.data[0], float) if self.data else False
+            count, fa_val = dfa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion, int(polynom_degree), raw=raw)
         else:
-            count, fa_val = fa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion)
+            raw = isinstance(self.data[0], float) if self.data else False
+            count, fa_val = fa(self.data, (w, self.wh, self.l), overlap_mode, min_window, window_expansion, raw=raw)
 
         self.count[w] = count
         self.dfa[w] = fa_val
